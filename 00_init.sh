@@ -1,3 +1,9 @@
+# Update Ubuntu:
+sudo apt-get update
+
+# Upgrade Ubuntu:
+sudo apt-get upgrade
+
 # Download and install nvm:
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
 
