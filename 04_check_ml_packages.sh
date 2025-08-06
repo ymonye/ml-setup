@@ -173,7 +173,7 @@ print_info "Checking core ML packages..."
 # Core packages - install all at once with -U flag
 print_info "Installing core ML packages..."
 if ask_install "Install core ML packages?"; then
-    run_install "uv pip install -U transformers accelerate datasets tokenizers sentencepiece protobuf safetensors huggingface-hub numpy scipy tqdm psutil fastapi uvicorn pydantic aiohttp requests triton kernels"
+    run_install "uv pip install -U transformers accelerate datasets tokenizers sentencepiece protobuf safetensors huggingface-hub scipy tqdm psutil fastapi uvicorn pydantic aiohttp requests triton kernels"
     print_info "✓ Core packages installation complete"
 fi
 
