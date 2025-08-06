@@ -85,6 +85,7 @@ declare -A PACKAGES=(
     ["pydantic"]="pydantic"
     ["aiohttp"]="aiohttp"
     ["requests"]="requests"
+    ["openai-harmony"]="openai_harmony"
 )
 # Check core packages
 MISSING_CORE=()
@@ -169,21 +170,12 @@ else
         fi
     fi
 fi
-# vLLM (GPT-OSS enabled version)
+# vLLM (GPT-OSS enabled version only)
 print_info "Checking vLLM (GPT-OSS enabled)..."
 VLLM_STATUS=$(check_package "vllm" "vllm")
 if [ "$VLLM_STATUS" = "installed" ]; then
-    # Check if it's the GPT-OSS version
     VLLM_VERSION=$(python -c "import vllm; print(vllm.__version__)" 2>/dev/null || echo "unknown")
-    if [[ "$VLLM_VERSION" == *"gptoss"* ]]; then
-        print_info "  ✓ vLLM installed (GPT-OSS enabled: $VLLM_VERSION)"
-    else
-        print_warning "  ! vLLM installed but not GPT-OSS enabled (version: $VLLM_VERSION)"
-        if ask_install "Upgrade to GPT-OSS enabled vLLM?"; then
-            print_info "Installing GPT-OSS enabled vLLM..."
-            run_install "uv pip install --pre vllm==0.10.1+gptoss --extra-index-url https://wheels.vllm.ai/gpt-oss/ --extra-index-url https://download.pytorch.org/whl/nightly/cu128 --index-strategy unsafe-best-match"
-        fi
-    fi
+    print_info "  ✓ vLLM installed (version: $VLLM_VERSION)"
 else
     print_warning "  ✗ vLLM not installed"
     if ask_install "Install GPT-OSS enabled vLLM?"; then
@@ -211,16 +203,6 @@ fi
 # Optional optimization packages
 echo ""
 print_info "Checking optional optimization packages..."
-# Intel Extension for PyTorch
-INTEL_EXT_STATUS=$(check_package "intel-extension-for-pytorch" "intel_extension_for_pytorch")
-if [ "$INTEL_EXT_STATUS" = "installed" ]; then
-    print_info "  ✓ Intel Extension for PyTorch"
-else
-    print_warning "  ✗ Intel Extension for PyTorch (optional - CPU optimization)"
-    if ask_install "Install Intel Extension for PyTorch?"; then
-        run_install "uv pip install intel-extension-for-pytorch"
-    fi
-fi
 # ONNX Runtime
 ONNX_STATUS=$(check_package "onnxruntime" "onnxruntime")
 if [ "$ONNX_STATUS" = "installed" ]; then
@@ -286,12 +268,6 @@ fi
 echo ""
 print_info "Optional Optimizations:"
 # Check optimization packages
-echo -n "  "
-if python -c "import intel_extension_for_pytorch" 2>/dev/null; then
-    print_info "✓ Intel Extension for PyTorch"
-else
-    print_warning "✗ Intel Extension for PyTorch"
-fi
 echo -n "  "
 if python -c "import onnxruntime" 2>/dev/null; then
     print_info "✓ ONNX Runtime"

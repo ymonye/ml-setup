@@ -222,6 +222,7 @@ if [ -n "$VIRTUAL_ENV" ]; then
         ["requests"]="requests"
         ["py-cpuinfo"]="cpuinfo"
         ["pandas"]="pandas"
+        ["openai-harmony"]="openai_harmony"
     )
     
     # Check inference frameworks separately
@@ -229,7 +230,6 @@ if [ -n "$VIRTUAL_ENV" ]; then
         ["sglang"]="sglang"
         ["vllm"]="vllm"
         ["llama-cpp-python"]="llama_cpp"
-        ["intel-extension-for-pytorch"]="intel_extension_for_pytorch"
         ["onnxruntime"]="onnxruntime"
         ["optimum"]="optimum"
     )
@@ -305,7 +305,7 @@ if [ -n "$VIRTUAL_ENV" ]; then
         
         # Check other dependencies
         OTHER_MISSING=()
-        for pkg in fastapi uvicorn pydantic aiohttp requests numpy scipy pandas tqdm psutil py-cpuinfo; do
+        for pkg in fastapi uvicorn pydantic aiohttp requests numpy scipy pandas tqdm psutil py-cpuinfo openai-harmony; do
             if [[ " ${MISSING_PACKAGES[@]} " =~ " $pkg " ]]; then
                 OTHER_MISSING+=($pkg)
             fi
@@ -316,7 +316,7 @@ if [ -n "$VIRTUAL_ENV" ]; then
         
         # Check CPU optimizations
         CPU_OPT_MISSING=()
-        for pkg in intel-extension-for-pytorch onnxruntime optimum; do
+        for pkg in onnxruntime optimum; do
             if [[ " ${MISSING_PACKAGES[@]} " =~ " $pkg " ]]; then
                 CPU_OPT_MISSING+=($pkg)
             fi
