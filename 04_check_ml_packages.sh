@@ -61,97 +61,27 @@ run_install() {
         return 1
     fi
 }
-# Check packages
-print_info "Checking ML packages..."
-# Core packages - Fixed import names
-declare -A PACKAGES=(
-    ["torch"]="torch"
-    ["torchvision"]="torchvision"
-    ["torchaudio"]="torchaudio"
-    ["transformers"]="transformers"
-    ["accelerate"]="accelerate"
-    ["datasets"]="datasets"
-    ["tokenizers"]="tokenizers"
-    ["sentencepiece"]="sentencepiece"
-    ["protobuf"]="google.protobuf"  # Fixed: protobuf imports as google.protobuf
-    ["safetensors"]="safetensors"
-    ["huggingface-hub"]="huggingface_hub"
-    ["numpy"]="numpy"
-    ["scipy"]="scipy"
-    ["tqdm"]="tqdm"
-    ["psutil"]="psutil"
-    ["fastapi"]="fastapi"
-    ["uvicorn"]="uvicorn"
-    ["pydantic"]="pydantic"
-    ["aiohttp"]="aiohttp"
-    ["requests"]="requests"
-    ["triton"]="triton"
-    ["kernels"]="kernels"
-)
-# Check core packages
-MISSING_CORE=()
-print_info "Core packages:"
-for pkg in "${!PACKAGES[@]}"; do
-    status=$(check_package "$pkg" "${PACKAGES[$pkg]}")
+# Check PyTorch first (most critical dependency)
+print_info "Checking PyTorch installation..."
+TORCH_MISSING=()
+for pkg in torch torchvision torchaudio; do
+    status=$(check_package "$pkg" "$pkg")
     if [ "$status" = "installed" ]; then
-        print_info "  ✓ $pkg"
+        version=$(python -c "import $pkg; print($pkg.__version__)" 2>/dev/null || echo "unknown")
+        print_info "  ✓ $pkg ($version)"
     else
         print_error "  ✗ $pkg"
-        MISSING_CORE+=($pkg)
+        TORCH_MISSING+=($pkg)
     fi
 done
-echo ""
-# Install missing core packages
-if [ ${#MISSING_CORE[@]} -gt 0 ]; then
-    print_warning "Missing ${#MISSING_CORE[@]} core packages"
-    
-    # PyTorch group
-    TORCH_MISSING=()
-    for pkg in torch torchvision torchaudio; do
-        if [[ " ${MISSING_CORE[@]} " =~ " $pkg " ]]; then
-            TORCH_MISSING+=($pkg)
-        fi
-    done
-    
-    if [ ${#TORCH_MISSING[@]} -gt 0 ]; then
-        print_info "PyTorch packages missing: ${TORCH_MISSING[*]}"
-        if ask_install "Install PyTorch packages (GPU version)?"; then
-            run_install "uv pip install torch==2.7.0 torchvision==0.20.0 torchaudio==2.7.0 --index-url https://download.pytorch.org/whl/cu124"
-        fi
-        echo ""
+
+if [ ${#TORCH_MISSING[@]} -gt 0 ]; then
+    print_info "PyTorch packages missing: ${TORCH_MISSING[*]}"
+    if ask_install "Install PyTorch packages (GPU version)?"; then
+        run_install "uv pip install torch==2.7.0 torchvision==0.20.0 torchaudio==2.7.0 --index-url https://download.pytorch.org/whl/cu124"
     fi
-    
-    # Other core packages
-    OTHER_MISSING=()
-    for pkg in "${MISSING_CORE[@]}"; do
-        if [[ ! "$pkg" =~ ^(torch|torchvision|torchaudio)$ ]]; then
-            OTHER_MISSING+=($pkg)
-        fi
-    done
-    
-    if [ ${#OTHER_MISSING[@]} -gt 0 ]; then
-        print_info "Other core packages missing: ${OTHER_MISSING[*]}"
-        if ask_install "Install core ML packages?"; then
-            for pkg in "${OTHER_MISSING[@]}"; do
-                run_install "uv pip install -U $pkg"
-            done
-            
-            # Install Triton kernels for MXFP4 compatibility
-            print_info "Installing Triton kernels for MXFP4 compatibility..."
-            run_install "uv pip install git+https://github.com/triton-lang/triton.git@main#subdirectory=python/triton_kernels"
-        fi
-        echo ""
-    fi
-else
-    print_info "✓ All core packages installed"
-    
-    # Install Triton kernels for MXFP4 compatibility
-    print_info "Checking Triton kernels for MXFP4 compatibility..."
-    if ask_install "Install Triton kernels for MXFP4 compatibility?"; then
-        run_install "uv pip install git+https://github.com/triton-lang/triton.git@main#subdirectory=python/triton_kernels"
-    fi
-    echo ""
 fi
+echo ""
 # Check inference frameworks
 echo ""
 print_info "Checking inference frameworks..."
@@ -236,6 +166,63 @@ else
     if ask_install "Install Optimum?"; then
         run_install "uv pip install optimum"
     fi
+fi
+# Check all other core packages after inference frameworks
+echo ""
+print_info "Checking core ML packages..."
+# Core packages - Fixed import names (torch/torchvision/torchaudio removed as they're handled separately)
+declare -A PACKAGES=(
+    ["transformers"]="transformers"
+    ["accelerate"]="accelerate"
+    ["datasets"]="datasets"
+    ["tokenizers"]="tokenizers"
+    ["sentencepiece"]="sentencepiece"
+    ["protobuf"]="google.protobuf"  # Fixed: protobuf imports as google.protobuf
+    ["safetensors"]="safetensors"
+    ["huggingface-hub"]="huggingface_hub"
+    ["numpy"]="numpy"
+    ["scipy"]="scipy"
+    ["tqdm"]="tqdm"
+    ["psutil"]="psutil"
+    ["fastapi"]="fastapi"
+    ["uvicorn"]="uvicorn"
+    ["pydantic"]="pydantic"
+    ["aiohttp"]="aiohttp"
+    ["requests"]="requests"
+    ["triton"]="triton"
+    ["kernels"]="kernels"
+)
+# Check core packages
+MISSING_CORE=()
+print_info "Core packages:"
+for pkg in "${!PACKAGES[@]}"; do
+    status=$(check_package "$pkg" "${PACKAGES[$pkg]}")
+    if [ "$status" = "installed" ]; then
+        print_info "  ✓ $pkg"
+    else
+        print_error "  ✗ $pkg"
+        MISSING_CORE+=($pkg)
+    fi
+done
+echo ""
+# Install missing core packages
+if [ ${#MISSING_CORE[@]} -gt 0 ]; then
+    print_warning "Missing ${#MISSING_CORE[@]} core packages"
+    print_info "Core packages missing: ${MISSING_CORE[*]}"
+    if ask_install "Install core ML packages?"; then
+        for pkg in "${MISSING_CORE[@]}"; do
+            run_install "uv pip install -U $pkg"
+        done
+    fi
+else
+    print_info "✓ All core packages installed"
+fi
+
+# Install Triton kernels for MXFP4 compatibility at the very end
+echo ""
+print_info "Checking Triton kernels for MXFP4 compatibility..."
+if ask_install "Install Triton kernels for MXFP4 compatibility?"; then
+    run_install "uv pip install git+https://github.com/triton-lang/triton.git@main#subdirectory=python/triton_kernels"
 fi
 # Summary
 echo ""
