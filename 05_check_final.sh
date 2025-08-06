@@ -117,6 +117,25 @@ print_info "Checking CUDA toolkit..."
 if command -v nvcc &> /dev/null; then
     CUDA_VERSION=$(nvcc --version | grep "release" | awk '{print $6}' | cut -d',' -f1)
     print_info "✓ CUDA toolkit (nvcc) installed - version $CUDA_VERSION"
+    
+    # Check gcc/g++ version compatibility for CUDA compilation
+    print_info "Checking gcc/g++ compatibility for CUDA..."
+    if command -v gcc &> /dev/null && command -v g++ &> /dev/null; then
+        GCC_VERSION=$(gcc --version | head -1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
+        GPP_VERSION=$(g++ --version | head -1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
+        
+        if [ "$GCC_VERSION" = "$GPP_VERSION" ]; then
+            print_info "✓ gcc ($GCC_VERSION) and g++ ($GPP_VERSION) versions match"
+        else
+            print_warning "⚠ gcc ($GCC_VERSION) and g++ ($GPP_VERSION) version mismatch"
+            print_info "This may cause CUDA compilation failures (llama-cpp-python, etc.)"
+            print_info "Run ./01_check_dependencies.sh to fix compiler compatibility"
+            MISSING_DEPS=true
+        fi
+    else
+        print_error "✗ gcc or g++ not found"
+        MISSING_DEPS=true
+    fi
 else
     print_error "✗ CUDA toolkit (nvcc) not installed"
     print_info "Required for GPU-optimized packages (flashinfer, etc.)"
@@ -139,14 +158,15 @@ else
     MISSING_DEPS=true
 fi
 
-# 4. Check Python 3.11.9
-print_info "Checking Python 3.11.9..."
-if pyenv versions 2>/dev/null | grep -q "3.11.9"; then
-    print_info "✓ Python 3.11.9 installed via pyenv"
+# 4. Check Python 3.12
+print_info "Checking Python 3.12..."
+if pyenv versions 2>/dev/null | grep -q "3.12"; then
+    PYTHON_312_VERSION=$(pyenv versions | grep "3.12" | head -1 | tr -d ' *')
+    print_info "✓ Python $PYTHON_312_VERSION installed via pyenv"
 else
-    print_error "✗ Python 3.11.9 not installed"
-    print_command "pyenv install 3.11.9"
-    print_command "pyenv global 3.11.9"
+    print_error "✗ Python 3.12 not installed"
+    print_command "pyenv install 3.12"
+    print_command "pyenv global 3.12"
     MISSING_DEPS=true
 fi
 
@@ -167,7 +187,7 @@ print_info "Checking virtual environment..."
 if [ -z "$VIRTUAL_ENV" ]; then
     print_warning "No virtual environment activated"
     print_info "Create and activate virtual environment:"
-    print_command "uv venv ~/ml_env --python 3.11.9"
+    print_command "uv venv ~/ml_env --python 3.12"
     print_command "source ~/ml_env/bin/activate"
     MISSING_DEPS=true
 else
@@ -230,7 +250,17 @@ if [ -n "$VIRTUAL_ENV" ]; then
     for pkg in "${!FRAMEWORKS[@]}"; do
         import_name="${FRAMEWORKS[$pkg]}"
         if python -c "import $import_name" 2>/dev/null; then
-            print_info "  ✓ $pkg"
+            # Special handling for vLLM to show if it's GPT-OSS enabled
+            if [ "$pkg" = "vllm" ]; then
+                version=$(python -c "import vllm; print(vllm.__version__)" 2>/dev/null || echo "installed")
+                if [[ "$version" == *"gptoss"* ]]; then
+                    print_info "  ✓ $pkg (GPT-OSS enabled: $version)"
+                else
+                    print_info "  ✓ $pkg ($version)"
+                fi
+            else
+                print_info "  ✓ $pkg"
+            fi
         else
             print_warning "  ✗ $pkg (optional)"
             MISSING_PACKAGES+=($pkg)
@@ -268,9 +298,9 @@ if [ -n "$VIRTUAL_ENV" ]; then
             fi
         fi
         
-        # Check vLLM
+        # Check vLLM (GPT-OSS enabled)
         if [[ " ${MISSING_PACKAGES[@]} " =~ " vllm " ]]; then
-            print_command 'uv pip install vllm'
+            print_command 'uv pip install --pre vllm==0.10.1+gptoss --extra-index-url https://wheels.vllm.ai/gpt-oss/ --extra-index-url https://download.pytorch.org/whl/nightly/cu128 --index-strategy unsafe-best-match'
         fi
         
         # Check other dependencies

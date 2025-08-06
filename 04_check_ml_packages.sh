@@ -114,7 +114,7 @@ if [ ${#MISSING_CORE[@]} -gt 0 ]; then
     if [ ${#TORCH_MISSING[@]} -gt 0 ]; then
         print_info "PyTorch packages missing: ${TORCH_MISSING[*]}"
         if ask_install "Install PyTorch packages (GPU version)?"; then
-            run_install "uv pip install torch torchvision torchaudio"
+            run_install "uv pip install torch==2.7.0 torchvision==0.20.0 torchaudio==2.7.0 --index-url https://download.pytorch.org/whl/cu124"
         fi
         echo ""
     fi
@@ -169,15 +169,26 @@ else
         fi
     fi
 fi
-# vLLM
-print_info "Checking vLLM..."
+# vLLM (GPT-OSS enabled version)
+print_info "Checking vLLM (GPT-OSS enabled)..."
 VLLM_STATUS=$(check_package "vllm" "vllm")
 if [ "$VLLM_STATUS" = "installed" ]; then
-    print_info "  ✓ vLLM installed"
+    # Check if it's the GPT-OSS version
+    VLLM_VERSION=$(python -c "import vllm; print(vllm.__version__)" 2>/dev/null || echo "unknown")
+    if [[ "$VLLM_VERSION" == *"gptoss"* ]]; then
+        print_info "  ✓ vLLM installed (GPT-OSS enabled: $VLLM_VERSION)"
+    else
+        print_warning "  ! vLLM installed but not GPT-OSS enabled (version: $VLLM_VERSION)"
+        if ask_install "Upgrade to GPT-OSS enabled vLLM?"; then
+            print_info "Installing GPT-OSS enabled vLLM..."
+            run_install "uv pip install --pre vllm==0.10.1+gptoss --extra-index-url https://wheels.vllm.ai/gpt-oss/ --extra-index-url https://download.pytorch.org/whl/nightly/cu128 --index-strategy unsafe-best-match"
+        fi
+    fi
 else
     print_warning "  ✗ vLLM not installed"
-    if ask_install "Install vLLM?"; then
-        run_install "uv pip install vllm"
+    if ask_install "Install GPT-OSS enabled vLLM?"; then
+        print_info "Installing GPT-OSS enabled vLLM..."
+        run_install "uv pip install --pre vllm==0.10.1+gptoss --extra-index-url https://wheels.vllm.ai/gpt-oss/ --extra-index-url https://download.pytorch.org/whl/nightly/cu128 --index-strategy unsafe-best-match"
     fi
 fi
 # llama.cpp
@@ -258,7 +269,11 @@ fi
 echo -n "  "
 if python -c "import vllm" 2>/dev/null; then
     version=$(python -c "import vllm; print(vllm.__version__)" 2>/dev/null || echo "installed")
-    print_info "✓ vLLM ($version)"
+    if [[ "$version" == *"gptoss"* ]]; then
+        print_info "✓ vLLM ($version) - GPT-OSS enabled"
+    else
+        print_info "✓ vLLM ($version)"
+    fi
 else
     print_warning "✗ vLLM (optional)"
 fi

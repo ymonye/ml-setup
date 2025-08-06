@@ -45,8 +45,8 @@ ENV_PATH="$HOME/${ENV_NAME}_env"
 # Check prerequisites
 print_info "Checking prerequisites..."
 
-if ! command -v python &> /dev/null || ! python --version 2>&1 | grep -q "3.11.9"; then
-    print_error "Python 3.11.9 is not active. Please run check_python.sh first."
+if ! command -v python &> /dev/null || ! python --version 2>&1 | grep -q "3.12"; then
+    print_error "Python 3.12 is not active. Please run check_python.sh first."
     if [ "$BEING_SOURCED" = false ]; then
         exit 1
     else
@@ -81,7 +81,7 @@ fi
 
 if [ ! -d "$ENV_PATH" ]; then
     print_info "Creating virtual environment at $ENV_PATH..."
-    uv venv "$ENV_PATH" --python 3.11.9
+    uv venv "$ENV_PATH" --python 3.12
     
     if [ $? -eq 0 ]; then
         print_info "✓ Virtual environment created successfully"

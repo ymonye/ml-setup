@@ -9,7 +9,7 @@ This is a machine learning environment setup collection for Ubuntu 22.04+. It co
 
 ### Environment Setup (Run in Order)
 1. `./01_check_dependencies.sh [-y]` - Install system packages and CUDA toolkit
-2. `./02_check_python.sh [-y]` - Install Python 3.11.9 via pyenv and uv package manager
+2. `./02_check_python.sh [-y]` - Install Python 3.12 via pyenv and uv package manager
 3. `./03_check_ml_env.sh [--auto] [env_name]` - Create ML virtual environment (default: ml_env)
 4. `./04_check_ml_packages.sh [-y]` - Install ML packages (PyTorch, SGLang, vLLM, etc.)
 5. `./05_check_final.sh` - Final verification of complete setup
@@ -36,7 +36,7 @@ All scripts follow consistent patterns:
 - Cleanup on failure (temp files, partial installations)
 
 ### Environment Management
-- Uses pyenv for Python version management (3.11.9 specifically)
+- Uses pyenv for Python version management (3.12 specifically)
 - Uses uv for fast Python package installation
 - Virtual environments stored as `~/ml_env` (or custom name)
 - Environment variables set for ML optimizations (NUMA, CPU threads, HuggingFace cache)

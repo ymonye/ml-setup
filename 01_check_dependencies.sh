@@ -102,9 +102,26 @@ for pkg in "${SYSTEM_PACKAGES[@]}"; do
         MISSING_PACKAGES+=($pkg)
     fi
 done
-# Check CUDA toolkit
+# Check CUDA driver and toolkit
 echo ""
-print_info "Checking CUDA toolkit..."
+print_info "Checking CUDA driver and toolkit..."
+
+# Check for NVIDIA driver and get supported CUDA version
+DRIVER_CUDA_VERSION=""
+if command -v nvidia-smi &> /dev/null; then
+    # Extract CUDA version supported by driver from nvidia-smi output
+    DRIVER_CUDA_VERSION=$(nvidia-smi | grep -oP 'CUDA Version:\s*\K[0-9]+\.[0-9]+' | head -1)
+    if [ -n "$DRIVER_CUDA_VERSION" ]; then
+        print_info "  ✓ NVIDIA driver detected - supports CUDA up to version $DRIVER_CUDA_VERSION"
+    else
+        print_warning "  ⚠ NVIDIA driver detected but couldn't determine CUDA version support"
+    fi
+else
+    print_warning "  ⚠ No NVIDIA driver detected (nvidia-smi not found)"
+    print_info "  Will default to CUDA 12.3 for H100/H200 compatibility"
+fi
+
+# Check for CUDA toolkit (nvcc)
 CUDA_MISSING=false
 if command -v nvcc &> /dev/null; then
     CUDA_VERSION=$(nvcc --version | grep "release" | awk '{print $6}' | cut -d',' -f1)
@@ -162,18 +179,91 @@ else
             fi
         fi
         
+        # Check and fix gcc/g++ version mismatch after package installation
+        if [ "$INSTALL_SUCCESS" = true ]; then
+            print_info "Checking gcc/g++ version compatibility..."
+            
+            # Get installed gcc version
+            if command -v gcc &> /dev/null; then
+                GCC_VERSION=$(gcc --version | head -1 | grep -oE '[0-9]+' | head -1)
+                print_info "Detected gcc-$GCC_VERSION"
+                
+                # Check if matching g++ version exists
+                if command -v g++-$GCC_VERSION &> /dev/null; then
+                    print_info "✓ g++-$GCC_VERSION already available"
+                else
+                    print_info "Installing g++-$GCC_VERSION to match gcc-$GCC_VERSION..."
+                    if sudo NEEDRESTART_MODE=l apt install -y g++-$GCC_VERSION; then
+                        print_info "✓ g++-$GCC_VERSION installed"
+                        
+                        # Set as default g++ compiler for CUDA compatibility
+                        if sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-$GCC_VERSION 100; then
+                            print_info "✓ Set g++-$GCC_VERSION as default g++ compiler"
+                        else
+                            print_warning "Could not set g++-$GCC_VERSION as default"
+                        fi
+                    else
+                        print_warning "Could not install g++-$GCC_VERSION - CUDA compilation may fail"
+                    fi
+                fi
+            fi
+        fi
+        
         # Install CUDA toolkit if missing
         if [ "$CUDA_MISSING" = true ] && [ "$INSTALL_SUCCESS" = true ]; then
             echo ""
+            
+            # Determine which CUDA version to install based on driver
+            TARGET_CUDA_VERSION=""
+            if [ -n "$DRIVER_CUDA_VERSION" ]; then
+                # Extract major.minor version from driver's supported CUDA
+                DRIVER_CUDA_MAJOR=$(echo $DRIVER_CUDA_VERSION | cut -d. -f1)
+                DRIVER_CUDA_MINOR=$(echo $DRIVER_CUDA_VERSION | cut -d. -f2)
+                
+                print_info "Driver supports CUDA $DRIVER_CUDA_VERSION"
+                
+                # Map driver CUDA version to available toolkit versions
+                # We'll try to install the highest compatible version
+                if [ "$DRIVER_CUDA_MAJOR" -ge 13 ]; then
+                    TARGET_CUDA_VERSION="13.0"
+                elif [ "$DRIVER_CUDA_MAJOR" -eq 12 ]; then
+                    if [ "$DRIVER_CUDA_MINOR" -ge 9 ]; then
+                        TARGET_CUDA_VERSION="12.9"
+                    elif [ "$DRIVER_CUDA_MINOR" -ge 6 ]; then
+                        TARGET_CUDA_VERSION="12.6"
+                    elif [ "$DRIVER_CUDA_MINOR" -ge 3 ]; then
+                        TARGET_CUDA_VERSION="12.3"
+                    elif [ "$DRIVER_CUDA_MINOR" -ge 2 ]; then
+                        TARGET_CUDA_VERSION="12.2"
+                    elif [ "$DRIVER_CUDA_MINOR" -ge 1 ]; then
+                        TARGET_CUDA_VERSION="12.1"
+                    else
+                        TARGET_CUDA_VERSION="12.0"
+                    fi
+                elif [ "$DRIVER_CUDA_MAJOR" -eq 11 ]; then
+                    TARGET_CUDA_VERSION="11.8"
+                else
+                    print_warning "Driver CUDA version $DRIVER_CUDA_VERSION is very old"
+                    TARGET_CUDA_VERSION="11.8"
+                fi
+            else
+                # No driver detected or couldn't determine version
+                # Default to CUDA 12.3 for modern GPUs like H100/H200
+                print_info "No driver version detected, defaulting to CUDA 12.3 for H100/H200 compatibility"
+                TARGET_CUDA_VERSION="12.3"
+            fi
+            
+            print_info "Target CUDA toolkit version: $TARGET_CUDA_VERSION"
+            
             if [ "$AUTO_YES" = true ]; then
                 INSTALL_CUDA="y"
             else
-                print_warning "CUDA toolkit is large (~4GB). Install it?"
-                read -p "Install CUDA toolkit? (y/n): " INSTALL_CUDA
+                print_warning "CUDA toolkit $TARGET_CUDA_VERSION is large (~4GB). Install it?"
+                read -p "Install CUDA toolkit $TARGET_CUDA_VERSION? (y/n): " INSTALL_CUDA
             fi
             
             if [[ "$INSTALL_CUDA" =~ ^[Yy]$ ]]; then
-                print_info "Installing CUDA toolkit..."
+                print_info "Installing CUDA toolkit $TARGET_CUDA_VERSION..."
                 print_info "Detecting appropriate CUDA repository for Ubuntu $VERSION_ID..."
                 
                 # Generate potential repo versions to try
@@ -246,23 +336,70 @@ else
                                         echo "$AVAILABLE_CUDA"
                                     fi
                                     
-                                    # Try to install the latest available
-                                    if sudo NEEDRESTART_MODE=l apt install -y cuda-toolkit 2>/dev/null; then
-                                        print_info "✓ CUDA toolkit installed successfully"
-                                        CUDA_INSTALLED=true
-                                    elif sudo NEEDRESTART_MODE=l apt install -y cuda-toolkit-12-3 2>/dev/null; then
-                                        print_info "✓ CUDA toolkit 12.3 installed successfully"
-                                        CUDA_INSTALLED=true
-                                    elif sudo NEEDRESTART_MODE=l apt install -y cuda-toolkit-12-2 2>/dev/null; then
-                                        print_info "✓ CUDA toolkit 12.2 installed successfully"
-                                        CUDA_INSTALLED=true
-                                    elif sudo NEEDRESTART_MODE=l apt install -y cuda-toolkit-12-1 2>/dev/null; then
-                                        print_info "✓ CUDA toolkit 12.1 installed successfully"
-                                        CUDA_INSTALLED=true
-                                    elif sudo NEEDRESTART_MODE=l apt install -y cuda-toolkit-11-8 2>/dev/null; then
-                                        print_info "✓ CUDA toolkit 11.8 installed successfully"
+                                    # Try to install the target CUDA version
+                                    # Convert TARGET_CUDA_VERSION (e.g., "12.3") to package format (e.g., "12-3")
+                                    CUDA_PKG_VERSION=$(echo $TARGET_CUDA_VERSION | sed 's/\./-/')
+                                    
+                                    print_info "Attempting to install cuda-toolkit-$CUDA_PKG_VERSION..."
+                                    
+                                    # First try the specific version we want
+                                    if sudo NEEDRESTART_MODE=l apt install -y cuda-toolkit-$CUDA_PKG_VERSION 2>/dev/null; then
+                                        print_info "✓ CUDA toolkit $TARGET_CUDA_VERSION installed successfully"
                                         CUDA_INSTALLED=true
                                     else
+                                        print_warning "cuda-toolkit-$CUDA_PKG_VERSION not available, trying fallback versions..."
+                                        
+                                        # Fallback strategy based on target version
+                                        # Try versions close to target, working backwards
+                                        if [ "$TARGET_CUDA_VERSION" = "12.9" ]; then
+                                            # Try 12.6, 12.3, 12.2 as fallbacks
+                                            for fallback in "12-6" "12-3" "12-2"; do
+                                                if sudo NEEDRESTART_MODE=l apt install -y cuda-toolkit-$fallback 2>/dev/null; then
+                                                    print_info "✓ CUDA toolkit $(echo $fallback | sed 's/-/./') installed successfully (fallback)"
+                                                    CUDA_INSTALLED=true
+                                                    break
+                                                fi
+                                            done
+                                        elif [ "$TARGET_CUDA_VERSION" = "12.6" ]; then
+                                            # Try 12.3, 12.2 as fallbacks
+                                            for fallback in "12-3" "12-2"; do
+                                                if sudo NEEDRESTART_MODE=l apt install -y cuda-toolkit-$fallback 2>/dev/null; then
+                                                    print_info "✓ CUDA toolkit $(echo $fallback | sed 's/-/./') installed successfully (fallback)"
+                                                    CUDA_INSTALLED=true
+                                                    break
+                                                fi
+                                            done
+                                        elif [ "$TARGET_CUDA_VERSION" = "12.3" ]; then
+                                            # Try 12.2, 12.1 as fallbacks
+                                            for fallback in "12-2" "12-1"; do
+                                                if sudo NEEDRESTART_MODE=l apt install -y cuda-toolkit-$fallback 2>/dev/null; then
+                                                    print_info "✓ CUDA toolkit $(echo $fallback | sed 's/-/./') installed successfully (fallback)"
+                                                    CUDA_INSTALLED=true
+                                                    break
+                                                fi
+                                            done
+                                        elif [ "$TARGET_CUDA_VERSION" = "12.2" ]; then
+                                            # Try 12.1 as fallback
+                                            if sudo NEEDRESTART_MODE=l apt install -y cuda-toolkit-12-1 2>/dev/null; then
+                                                print_info "✓ CUDA toolkit 12.1 installed successfully (fallback)"
+                                                CUDA_INSTALLED=true
+                                            fi
+                                        elif [ "$TARGET_CUDA_VERSION" = "11.8" ]; then
+                                            # No fallback for 11.8, it's already our minimum
+                                            print_warning "Could not install CUDA toolkit 11.8"
+                                        fi
+                                        
+                                        # Last resort: try generic cuda-toolkit if nothing else worked
+                                        if [ "$CUDA_INSTALLED" = false ]; then
+                                            print_info "Trying generic cuda-toolkit package as last resort..."
+                                            if sudo NEEDRESTART_MODE=l apt install -y cuda-toolkit 2>/dev/null; then
+                                                print_info "✓ CUDA toolkit installed successfully (generic version)"
+                                                CUDA_INSTALLED=true
+                                            fi
+                                        fi
+                                    fi
+                                    
+                                    if [ "$CUDA_INSTALLED" = false ]; then
                                         print_warning "Could not install CUDA toolkit from $UBUNTU_VERSION repository"
                                     fi
                                     

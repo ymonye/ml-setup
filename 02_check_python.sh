@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Script: check_python.sh
-# Purpose: Check and install Python 3.11.9 via pyenv and uv
+# Purpose: Check and install Python 3.12 via pyenv and uv
 
 # Colors
 RED='\033[0;31m'
@@ -100,58 +100,69 @@ fi
 
 echo ""
 
-# Step 2: Check and install Python 3.11.9
-print_info "Checking Python 3.11.9..."
-if pyenv versions 2>/dev/null | grep -q "3.11.9"; then
-    print_info "✓ Python 3.11.9 is installed"
+# Step 2: Check and install Python 3.12
+print_info "Checking Python 3.12..."
+if pyenv versions 2>/dev/null | grep -q "3.12"; then
+    print_info "✓ Python 3.12 is installed"
     
     # Check if it's the global version
-    if pyenv version | grep -q "3.11.9"; then
-        print_info "✓ Python 3.11.9 is set as global"
+    if pyenv version | grep -q "3.12"; then
+        print_info "✓ Python 3.12 is set as global"
     else
-        print_warning "Python 3.11.9 is installed but not set as global"
+        print_warning "Python 3.12 is installed but not set as global"
         if [ "$AUTO_YES" = true ]; then
             SET_GLOBAL="y"
         else
-            read -p "Set Python 3.11.9 as global? (y/n): " SET_GLOBAL
+            read -p "Set Python 3.12 as global? (y/n): " SET_GLOBAL
         fi
         
         if [[ "$SET_GLOBAL" =~ ^[Yy]$ ]]; then
-            pyenv global 3.11.9
+            # Get the latest 3.12.x version
+            PYTHON_312_VERSION=$(pyenv versions | grep "3.12" | head -1 | tr -d ' *')
+            pyenv global $PYTHON_312_VERSION
             pyenv rehash
-            print_info "✓ Set Python 3.11.9 as global"
+            print_info "✓ Set Python $PYTHON_312_VERSION as global"
         fi
     fi
 else
-    print_error "✗ Python 3.11.9 is not installed"
+    print_error "✗ Python 3.12 is not installed"
     
     if [ "$AUTO_YES" = true ]; then
         INSTALL_PYTHON="y"
     else
-        read -p "Install Python 3.11.9? This will take 5-15 minutes. (y/n): " INSTALL_PYTHON
+        read -p "Install Python 3.12? This will take 5-15 minutes. (y/n): " INSTALL_PYTHON
     fi
     
     if [[ "$INSTALL_PYTHON" =~ ^[Yy]$ ]]; then
-        print_info "Installing Python 3.11.9 via pyenv..."
+        # Get the latest Python 3.12.x version
+        print_info "Finding latest Python 3.12 version..."
+        LATEST_312=$(pyenv install --list | grep "^\s*3\.12" | grep -v "[a-zA-Z]" | tail -1 | tr -d ' ')
+        
+        if [ -z "$LATEST_312" ]; then
+            print_error "Could not find Python 3.12 version"
+            exit 1
+        fi
+        
+        print_info "Installing Python $LATEST_312 via pyenv..."
         print_info "This compiles Python from source and may take 5-15 minutes."
         
         # Speed up compilation with parallel jobs
-        MAKE_OPTS="-j$(nproc)" pyenv install 3.11.9
+        MAKE_OPTS="-j$(nproc)" pyenv install $LATEST_312
         
         if [ $? -eq 0 ]; then
-            pyenv global 3.11.9
+            pyenv global $LATEST_312
             pyenv rehash
             
             # Reload to get new Python
             reload_shell_env
             
-            print_info "✓ Python 3.11.9 installed and set as global"
+            print_info "✓ Python $LATEST_312 installed and set as global"
         else
-            print_error "Failed to install Python 3.11.9"
+            print_error "Failed to install Python $LATEST_312"
             exit 1
         fi
     else
-        print_info "Skipping Python 3.11.9 installation."
+        print_info "Skipping Python 3.12 installation."
     fi
 fi
 
@@ -224,15 +235,16 @@ else
 fi
 
 # Check Python
-if command -v python &> /dev/null && python --version 2>&1 | grep -q "3.11.9"; then
+if command -v python &> /dev/null && python --version 2>&1 | grep -q "3.12"; then
     print_info "  ✓ Python: $(python --version)"
     print_info "    Location: $(which python)"
 else
-    if pyenv versions 2>/dev/null | grep -q "3.11.9"; then
-        print_warning "  ! Python 3.11.9 installed but not active"
-        print_info "    Run: pyenv global 3.11.9"
+    if pyenv versions 2>/dev/null | grep -q "3.12"; then
+        print_warning "  ! Python 3.12 installed but not active"
+        PYTHON_312_VERSION=$(pyenv versions | grep "3.12" | head -1 | tr -d ' *')
+        print_info "    Run: pyenv global $PYTHON_312_VERSION"
     else
-        print_error "  ✗ Python 3.11.9 not installed"
+        print_error "  ✗ Python 3.12 not installed"
     fi
     ALL_GOOD=false
 fi
