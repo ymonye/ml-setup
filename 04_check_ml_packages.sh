@@ -170,35 +170,10 @@ fi
 # Check all other core packages after inference frameworks
 echo ""
 print_info "Checking core ML packages..."
-# Core packages - Fixed import names (torch/torchvision/torchaudio removed as they're handled separately)
-declare -A PACKAGES=(
-    ["transformers"]="transformers"
-    ["accelerate"]="accelerate"
-    ["datasets"]="datasets"
-    ["tokenizers"]="tokenizers"
-    ["sentencepiece"]="sentencepiece"
-    ["protobuf"]="google.protobuf"  # Fixed: protobuf imports as google.protobuf
-    ["safetensors"]="safetensors"
-    ["huggingface-hub"]="huggingface_hub"
-    ["numpy"]="numpy"
-    ["scipy"]="scipy"
-    ["tqdm"]="tqdm"
-    ["psutil"]="psutil"
-    ["fastapi"]="fastapi"
-    ["uvicorn"]="uvicorn"
-    ["pydantic"]="pydantic"
-    ["aiohttp"]="aiohttp"
-    ["requests"]="requests"
-    ["triton"]="triton"
-    ["kernels"]="kernels"
-)
-# Install all core packages without checking
+# Core packages - install all at once with -U flag
 print_info "Installing core ML packages..."
 if ask_install "Install core ML packages?"; then
-    for pkg in "${!PACKAGES[@]}"; do
-        print_info "Installing $pkg..."
-        run_install "uv pip install -U $pkg"
-    done
+    run_install "uv pip install -U transformers accelerate datasets tokenizers sentencepiece protobuf safetensors huggingface-hub numpy scipy tqdm psutil fastapi uvicorn pydantic aiohttp requests triton kernels"
     print_info "✓ Core packages installation complete"
 fi
 
