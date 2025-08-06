@@ -85,7 +85,8 @@ declare -A PACKAGES=(
     ["pydantic"]="pydantic"
     ["aiohttp"]="aiohttp"
     ["requests"]="requests"
-    ["openai-harmony"]="openai_harmony"
+    ["triton"]="triton"
+    ["kernels"]="kernels"
 )
 # Check core packages
 MISSING_CORE=()
@@ -131,12 +132,25 @@ if [ ${#MISSING_CORE[@]} -gt 0 ]; then
     if [ ${#OTHER_MISSING[@]} -gt 0 ]; then
         print_info "Other core packages missing: ${OTHER_MISSING[*]}"
         if ask_install "Install core ML packages?"; then
-            run_install "uv pip install ${OTHER_MISSING[*]}"
+            for pkg in "${OTHER_MISSING[@]}"; do
+                run_install "uv pip install -U $pkg"
+            done
+            
+            # Install Triton kernels for MXFP4 compatibility
+            print_info "Installing Triton kernels for MXFP4 compatibility..."
+            run_install "uv pip install git+https://github.com/triton-lang/triton.git@main#subdirectory=python/triton_kernels"
         fi
         echo ""
     fi
 else
     print_info "✓ All core packages installed"
+    
+    # Install Triton kernels for MXFP4 compatibility
+    print_info "Checking Triton kernels for MXFP4 compatibility..."
+    if ask_install "Install Triton kernels for MXFP4 compatibility?"; then
+        run_install "uv pip install git+https://github.com/triton-lang/triton.git@main#subdirectory=python/triton_kernels"
+    fi
+    echo ""
 fi
 # Check inference frameworks
 echo ""

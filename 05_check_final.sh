@@ -222,7 +222,8 @@ if [ -n "$VIRTUAL_ENV" ]; then
         ["requests"]="requests"
         ["py-cpuinfo"]="cpuinfo"
         ["pandas"]="pandas"
-        ["openai-harmony"]="openai_harmony"
+        ["triton"]="triton"
+        ["kernels"]="kernels"
     )
     
     # Check inference frameworks separately
@@ -305,7 +306,7 @@ if [ -n "$VIRTUAL_ENV" ]; then
         
         # Check other dependencies
         OTHER_MISSING=()
-        for pkg in fastapi uvicorn pydantic aiohttp requests numpy scipy pandas tqdm psutil py-cpuinfo openai-harmony; do
+        for pkg in fastapi uvicorn pydantic aiohttp requests numpy scipy pandas tqdm psutil py-cpuinfo triton kernels; do
             if [[ " ${MISSING_PACKAGES[@]} " =~ " $pkg " ]]; then
                 OTHER_MISSING+=($pkg)
             fi
