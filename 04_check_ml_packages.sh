@@ -192,38 +192,20 @@ declare -A PACKAGES=(
     ["triton"]="triton"
     ["kernels"]="kernels"
 )
-# Check core packages
-MISSING_CORE=()
-print_info "Core packages:"
-for pkg in "${!PACKAGES[@]}"; do
-    status=$(check_package "$pkg" "${PACKAGES[$pkg]}")
-    if [ "$status" = "installed" ]; then
-        print_info "  ✓ $pkg"
-    else
-        print_error "  ✗ $pkg"
-        MISSING_CORE+=($pkg)
-    fi
-done
-echo ""
-# Install missing core packages
-if [ ${#MISSING_CORE[@]} -gt 0 ]; then
-    print_warning "Missing ${#MISSING_CORE[@]} core packages"
-    print_info "Core packages missing: ${MISSING_CORE[*]}"
-    if ask_install "Install core ML packages?"; then
-        for pkg in "${MISSING_CORE[@]}"; do
-            run_install "uv pip install -U $pkg"
-        done
-    fi
-else
-    print_info "✓ All core packages installed"
+# Install all core packages without checking
+print_info "Installing core ML packages..."
+if ask_install "Install core ML packages?"; then
+    for pkg in "${!PACKAGES[@]}"; do
+        print_info "Installing $pkg..."
+        run_install "uv pip install -U $pkg"
+    done
+    print_info "✓ Core packages installation complete"
 fi
 
 # Install Triton kernels for MXFP4 compatibility at the very end
 echo ""
-print_info "Checking Triton kernels for MXFP4 compatibility..."
-if ask_install "Install Triton kernels for MXFP4 compatibility?"; then
-    run_install "uv pip install git+https://github.com/triton-lang/triton.git@main#subdirectory=python/triton_kernels"
-fi
+print_info "Installing Triton kernels for MXFP4 compatibility..."
+run_install "uv pip install git+https://github.com/triton-lang/triton.git@main#subdirectory=python/triton_kernels"
 # Summary
 echo ""
 echo "=============================================="
