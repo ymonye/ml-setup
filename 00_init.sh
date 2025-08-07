@@ -20,8 +20,11 @@ nvm current # Should print "v22.18.0".
 # Verify npm version:
 npm -v # Should print "10.9.3".
 
-# Install Claude Code:
+# Install Bunch of Coding CLIs:
+npm install -g @openai/codex
 npm install -g @anthropic-ai/claude-code
+curl https://cursor.com/install -fsS | bash
+npm i -g opencode-ai@latest
 
 # Load Claude Code:
 claude

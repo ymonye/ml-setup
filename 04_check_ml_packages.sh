@@ -1,346 +1,270 @@
-#!/bin/bash
-# Script: check_ml_packages.sh
-# Purpose: Check and install ML packages (PyTorch, SGLang, vLLM, etc.)
-# Usage: ./check_ml_packages.sh [-y]
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-print_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
-print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
-print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
-print_command() { echo -e "${BLUE}[RUN]${NC} $1"; }
-# Parse arguments
-AUTO_YES=false
-if [[ "$1" == "-y" ]]; then
-    AUTO_YES=true
-fi
-# Check if in virtual environment
-if [ -z "$VIRTUAL_ENV" ]; then
-    print_error "No virtual environment activated!"
-    print_info "Please activate your ML environment first:"
-    print_command "source ~/ml_env/activate_ml"
-    exit 1
-fi
-print_info "Virtual environment: $VIRTUAL_ENV"
-echo ""
-# Function to check Python package
-check_package() {
-    local pkg=$1
-    local import_name=${2:-$pkg}
-    import_name=$(echo "$import_name" | sed 's/-/_/g')
-    
-    if python -c "import $import_name" 2>/dev/null; then
-        echo "installed"
-    else
-        echo "missing"
-    fi
-}
-# Ask for installation
-ask_install() {
-    local prompt=$1
-    if [ "$AUTO_YES" = true ]; then
-        return 0
-    else
-        read -p "$prompt (y/n): " response
-        [[ "$response" =~ ^[Yy]$ ]]
-    fi
-}
-# Run installation command
-run_install() {
-    local cmd=$1
-    print_info "Running: $cmd"
-    eval "$cmd"
-    if [ $? -eq 0 ]; then
-        print_info "✓ Installation successful"
-        return 0
-    else
-        print_error "✗ Installation failed"
-        return 1
-    fi
-}
-# Check PyTorch first (most critical dependency)
-print_info "Checking PyTorch installation..."
-TORCH_MISSING=()
-for pkg in torch torchvision torchaudio; do
-    status=$(check_package "$pkg" "$pkg")
-    if [ "$status" = "installed" ]; then
-        version=$(python -c "import $pkg; print($pkg.__version__)" 2>/dev/null || echo "unknown")
-        print_info "  ✓ $pkg ($version)"
-    else
-        print_error "  ✗ $pkg"
-        TORCH_MISSING+=($pkg)
-    fi
-done
+#!/usr/bin/env python3
+"""
+Script: 04.py
+Purpose: Install ML packages based on detected Python environment
+Usage: python 04.py [-y]
+"""
 
-if [ ${#TORCH_MISSING[@]} -gt 0 ]; then
-    print_info "PyTorch packages missing: ${TORCH_MISSING[*]}"
-    if ask_install "Install PyTorch packages (GPU version)?"; then
-        run_install "uv pip install torch==2.7.0 torchvision==0.20.0 torchaudio==2.7.0 --index-url https://download.pytorch.org/whl/cu124"
-    fi
-fi
-echo ""
-# Check inference frameworks
-echo ""
-print_info "Checking inference frameworks..."
-# Function to detect GPU and set TORCH_CUDA_ARCH_LIST
-detect_gpu_arch() {
-    if ! command -v nvidia-smi &> /dev/null; then
+import os
+import sys
+import subprocess
+import argparse
+from pathlib import Path
+
+# Colors for output
+class Colors:
+    RED = '\033[0;31m'
+    GREEN = '\033[0;32m'
+    YELLOW = '\033[1;33m'
+    BLUE = '\033[0;34m'
+    NC = '\033[0m'  # No Color
+
+def print_info(msg):
+    print(f"{Colors.GREEN}[INFO]{Colors.NC} {msg}")
+
+def print_error(msg):
+    print(f"{Colors.RED}[ERROR]{Colors.NC} {msg}")
+
+def print_warning(msg):
+    print(f"{Colors.YELLOW}[WARNING]{Colors.NC} {msg}")
+
+def print_command(msg):
+    print(f"{Colors.BLUE}[RUN]{Colors.NC} {msg}")
+
+def detect_environment():
+    """Detect which ML environment is active"""
+    virtual_env = os.environ.get('VIRTUAL_ENV', '')
+    
+    if not virtual_env:
+        return None
+    
+    env_path = Path(virtual_env)
+    env_name = env_path.name
+    
+    # Check if it's one of our expected environments
+    if 'transformers_env' in str(env_path):
+        return 'transformers_env'
+    elif 'vllm_env' in str(env_path):
+        return 'vllm_env'
+    elif 'sglang_env' in str(env_path):
+        return 'sglang_env'
+    
+    # Also check by exact name match
+    if env_name == 'transformers_env':
+        return 'transformers_env'
+    elif env_name == 'vllm_env':
+        return 'vllm_env'
+    elif env_name == 'sglang_env':
+        return 'sglang_env'
+    
+    return None
+
+def run_command(cmd, description=""):
+    """Run a shell command and return success status"""
+    if description:
+        print_info(description)
+    print_command(cmd)
+    
+    try:
+        # Stream output directly to terminal so dependencies are visible
+        result = subprocess.run(cmd, shell=True, check=True)
+        print_info("✓ Installation successful")
+        return True
+    except subprocess.CalledProcessError as e:
+        print_error("✗ Installation failed")
+        return False
+
+def ask_install(prompt, auto_yes=False):
+    """Ask user for installation confirmation"""
+    if auto_yes:
+        return True
+    
+    response = input(f"{prompt} (y/n): ").strip().lower()
+    return response in ['y', 'yes']
+
+def detect_gpu_arch():
+    """Detect GPU architecture and set TORCH_CUDA_ARCH_LIST"""
+    try:
+        # Check if nvidia-smi is available
+        result = subprocess.run(['nvidia-smi', '--query-gpu=name', '--format=csv,noheader'],
+                              capture_output=True, text=True, check=True)
+        gpu_name = result.stdout.strip().split('\n')[0].upper()
+        
+        print_info(f"Detected GPU: {gpu_name}")
+        
+        arch_list = ""
+        
+        # Determine architecture based on GPU model (ordered by compute capability)
+        
+        # sm_70 (7.0) - Volta Architecture
+        if "V100" in gpu_name:
+            arch_list = "7.0"
+            print_info(f"  → {gpu_name} (Volta) detected: sm_70")
+        
+        # sm_75 (7.5) - Turing Architecture
+        elif "T4" in gpu_name or \
+             ("RTX 5000" in gpu_name and "ADA" not in gpu_name) or \
+             ("RTX 4000" in gpu_name and "ADA" not in gpu_name) or \
+             ("RTX 6000" in gpu_name and "ADA" not in gpu_name):
+            arch_list = "7.5"
+            print_info(f"  → {gpu_name} (Turing) detected: sm_75")
+        
+        # sm_80 (8.0) - Ampere Architecture (Data Center)
+        elif any(x in gpu_name for x in ["A100", "A30"]):
+            arch_list = "8.0"
+            print_info(f"  → {gpu_name} (Ampere) detected: sm_80")
+        
+        # sm_86 (8.6) - Ampere Architecture (Consumer & Professional)
+        elif any(x in gpu_name for x in ["RTX 3090", "3090", "RTX 3080", "3080", "RTX 3070", "3070",
+                                          "RTX A6000", "A6000", "RTX A5000", "A5000", "RTX A4500", "A4500",
+                                          "RTX A4000", "A4000", "RTX A2000", "A2000", "A10", "A40"]):
+            arch_list = "8.6"
+            print_info(f"  → {gpu_name} (Ampere) detected: sm_86")
+        
+        # sm_89 (8.9) - Ada Lovelace Architecture
+        elif any(x in gpu_name for x in ["RTX 4090", "4090", "RTX 4070 TI", "4070 TI", "L40S", "L40", "L4"]) or \
+             ("RTX 6000" in gpu_name and "ADA" in gpu_name) or \
+             ("RTX 5000" in gpu_name and "ADA" in gpu_name) or \
+             ("RTX 4000" in gpu_name and "ADA" in gpu_name):
+            arch_list = "8.9"
+            print_info(f"  → {gpu_name} (Ada Lovelace) detected: sm_89")
+        
+        # sm_90 (9.0) - Hopper Architecture
+        elif any(x in gpu_name for x in ["H100", "H200", "GH200"]):
+            arch_list = "9.0"
+            print_info(f"  → {gpu_name} (Hopper) detected: sm_90")
+        
+        # sm_100 (10.0) - Blackwell Architecture
+        elif "B200" in gpu_name:
+            arch_list = "10.0"
+            print_info(f"  → {gpu_name} (Blackwell) detected: sm_100")
+        
+        # sm_120 (12.0) - Blackwell Architecture (RTX 50 series)
+        elif any(x in gpu_name for x in ["RTX 5090", "5090"]):
+            arch_list = "12.0"
+            print_info(f"  → {gpu_name} (Blackwell) detected: sm_120")
+        else:
+            print_warning("  → Unknown GPU model, will use default PyTorch CUDA architectures")
+            return None
+        
+        # Set environment variable
+        os.environ['TORCH_CUDA_ARCH_LIST'] = arch_list
+        print_info(f"  → Set TORCH_CUDA_ARCH_LIST={arch_list}")
+        return arch_list
+        
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
+
+def check_nvcc():
+    """Check if nvcc is available"""
+    try:
+        result = subprocess.run(['nvcc', '--version'], 
+                              capture_output=True, text=True, check=True)
+        print_info("✓ CUDA toolkit (nvcc) available")
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print_warning("✗ CUDA toolkit (nvcc) not found")
+        return False
+
+def install_transformers_packages(auto_yes=False):
+    """Install packages for transformers environment"""
+    print_info("Installing packages for transformers_env...")
+    
+    # Main transformers packages
+    if ask_install("Install transformers ecosystem packages?", auto_yes):
+        cmd = "uv pip install -U transformers accelerate torch triton kernels"
+        if not run_command(cmd, "Installing transformers ecosystem"):
+            return False
+    
+    # Triton kernels from git
+    if ask_install("Install Triton kernels for MXFP4 compatibility?", auto_yes):
+        cmd = "uv pip install git+https://github.com/triton-lang/triton.git@main#subdirectory=python/triton_kernels"
+        if not run_command(cmd, "Installing Triton kernels"):
+            print_warning("Triton kernels installation failed, but continuing...")
+    
+    return True
+
+def install_vllm_packages(auto_yes=False):
+    """Install packages for vllm environment"""
+    print_info("Installing packages for vllm_env...")
+    
+    if ask_install("Install GPT-OSS enabled vLLM?", auto_yes):
+        cmd = ("uv pip install --pre vllm==0.10.1+gptoss "
+               "--extra-index-url https://wheels.vllm.ai/gpt-oss/ "
+               "--extra-index-url https://download.pytorch.org/whl/nightly/cu128 "
+               "--index-strategy unsafe-best-match")
+        if not run_command(cmd, "Installing GPT-OSS enabled vLLM"):
+            return False
+    
+    return True
+
+def install_sglang_packages(auto_yes=False):
+    """Install packages for sglang environment"""
+    print_info("SGLang environment detected - no specific packages to install at this time")
+    return True
+
+def main():
+    parser = argparse.ArgumentParser(description='Install ML packages based on environment')
+    parser.add_argument('-y', '--yes', action='store_true', 
+                       help='Auto-accept all prompts')
+    args = parser.parse_args()
+    
+    # Check if in virtual environment
+    if not os.environ.get('VIRTUAL_ENV'):
+        print_error("No virtual environment activated!")
+        print_info("Please activate one of the following environments:")
+        print_command("source ~/transformers_env/bin/activate")
+        print_command("source ~/vllm_env/bin/activate")
+        print_command("source ~/sglang_env/bin/activate")
         return 1
-    fi
     
-    local gpu_name=$(nvidia-smi --query-gpu=name --format=csv,noheader | head -n1)
-    local arch_list=""
+    print_info(f"Virtual environment: {os.environ['VIRTUAL_ENV']}")
+    print()
     
-    # Clean up GPU name
-    gpu_name=$(echo "$gpu_name" | tr '[:lower:]' '[:upper:]')
+    # Detect environment type
+    env_type = detect_environment()
     
-    print_info "Detected GPU: $gpu_name"
+    if not env_type:
+        print_error("Current environment is not one of the expected ML environments!")
+        print_info("Expected one of: transformers_env, vllm_env, sglang_env")
+        print_info(f"Current environment: {os.environ.get('VIRTUAL_ENV', 'None')}")
+        return 1
     
-    # Determine architecture based on GPU model
-    case "$gpu_name" in
-        *"H100"*)
-            arch_list="9.0"
-            print_info "  → H100 (Hopper) detected: sm_90"
-            ;;
-        *"H200"*)
-            arch_list="9.0"
-            print_info "  → H200 (Hopper) detected: sm_90"
-            ;;
-        *"B200"*)
-            arch_list="10.0"
-            print_info "  → B200 (Blackwell) detected: sm_100"
-            ;;
-        *"RTX 4090"*|*"4090"*)
-            arch_list="8.9"
-            print_info "  → RTX 4090 (Ada Lovelace) detected: sm_89"
-            ;;
-        *"RTX 5090"*|*"5090"*)
-            arch_list="12.0"
-            print_info "  → RTX 5090 (Blackwell) detected: sm_120"
-            ;;
-        *"RTX 6000"*|*"RTX A6000"*)
-            # Need to distinguish between Ada and Blackwell versions
-            if [[ "$gpu_name" == *"ADA"* ]]; then
-                arch_list="8.9"
-                print_info "  → RTX 6000 Ada (Ada Lovelace) detected: sm_89"
-            else
-                # Check CUDA version to infer if it's Blackwell
-                local cuda_version=$(nvcc --version 2>/dev/null | grep "release" | awk '{print $6}' | cut -d',' -f1)
-                if [[ "$cuda_version" == "12.8" ]] || [[ "$cuda_version" > "12.8" ]]; then
-                    arch_list="12.0"
-                    print_info "  → RTX 6000 Pro (Blackwell) detected: sm_120"
-                else
-                    arch_list="8.9"
-                    print_info "  → RTX 6000 (Ada Lovelace) detected: sm_89"
-                fi
-            fi
-            ;;
-        *"A100"*)
-            arch_list="8.0"
-            print_info "  → A100 (Ampere) detected: sm_80"
-            ;;
-        *"A10"*|*"A40"*)
-            arch_list="8.6"
-            print_info "  → A10/A40 (Ampere) detected: sm_86"
-            ;;
-        *"V100"*)
-            arch_list="7.0"
-            print_info "  → V100 (Volta) detected: sm_70"
-            ;;
-        *"T4"*)
-            arch_list="7.5"
-            print_info "  → T4 (Turing) detected: sm_75"
-            ;;
-        *"RTX 3090"*|*"3090"*)
-            arch_list="8.6"
-            print_info "  → RTX 3090 (Ampere) detected: sm_86"
-            ;;
-        *"RTX 3080"*|*"3080"*)
-            arch_list="8.6"
-            print_info "  → RTX 3080 (Ampere) detected: sm_86"
-            ;;
-        *)
-            print_warning "  → Unknown GPU model, will use default PyTorch CUDA architectures"
-            return 1
-            ;;
-    esac
+    print_info(f"Detected environment type: {env_type}")
+    print()
     
-    # Export the architecture list
-    export TORCH_CUDA_ARCH_LIST="$arch_list"
-    print_info "  → Set TORCH_CUDA_ARCH_LIST=$arch_list"
+    # Check for CUDA and set architecture if available
+    has_nvcc = check_nvcc()
+    if has_nvcc:
+        detect_gpu_arch()
+    print()
+    
+    # Install packages based on environment
+    success = False
+    
+    if env_type == 'transformers_env':
+        success = install_transformers_packages(args.yes)
+    elif env_type == 'vllm_env':
+        success = install_vllm_packages(args.yes)
+    elif env_type == 'sglang_env':
+        success = install_sglang_packages(args.yes)
+    
+    # Summary
+    print()
+    print("=" * 50)
+    if success:
+        print_info("Installation complete!")
+        print_info(f"Environment: {env_type}")
+        
+        # Verify GPU availability
+        print()
+        print_info("To verify GPU availability:")
+        print_command("python -c 'import torch; print(f\"CUDA available: {torch.cuda.is_available()}\")'")
+    else:
+        print_error("Some installations failed. Please check the errors above.")
+        return 1
     
     return 0
-}
 
-# Check if nvcc is available for optimized builds
-HAS_NVCC=false
-if command -v nvcc &> /dev/null; then
-    HAS_NVCC=true
-    print_info "✓ CUDA toolkit (nvcc) available"
-    
-    # Detect GPU and set architecture
-    detect_gpu_arch
-else
-    print_warning "✗ CUDA toolkit (nvcc) not found - some packages will use fallback versions"
-fi
-echo ""
-# SGLang
-print_info "Checking SGLang..."
-SGLANG_STATUS=$(check_package "sglang" "sglang")
-if [ "$SGLANG_STATUS" = "installed" ]; then
-    print_info "  ✓ SGLang installed"
-else
-    print_warning "  ✗ SGLang not installed"
-    if ask_install "Install SGLang?"; then
-        if [ "$HAS_NVCC" = true ]; then
-            print_info "CUDA toolkit detected, installing SGLang with all features..."
-            if ! run_install 'uv pip install "sglang[all]"'; then
-                print_warning "Full installation failed, trying base SGLang..."
-                run_install "uv pip install sglang"
-            fi
-        else
-            print_info "No CUDA toolkit, installing base SGLang..."
-            run_install "uv pip install sglang"
-        fi
-    fi
-fi
-# vLLM (GPT-OSS enabled version only)
-print_info "Checking vLLM (GPT-OSS enabled)..."
-VLLM_STATUS=$(check_package "vllm" "vllm")
-if [ "$VLLM_STATUS" = "installed" ]; then
-    VLLM_VERSION=$(python -c "import vllm; print(vllm.__version__)" 2>/dev/null || echo "unknown")
-    print_info "  ✓ vLLM installed (version: $VLLM_VERSION)"
-else
-    print_warning "  ✗ vLLM not installed"
-    if ask_install "Install GPT-OSS enabled vLLM?"; then
-        print_info "Installing GPT-OSS enabled vLLM..."
-        run_install "uv pip install --pre vllm==0.10.1+gptoss --extra-index-url https://wheels.vllm.ai/gpt-oss/ --extra-index-url https://download.pytorch.org/whl/nightly/cu128 --index-strategy unsafe-best-match"
-    fi
-fi
-# llama.cpp
-print_info "Checking llama.cpp..."
-LLAMA_STATUS=$(check_package "llama-cpp-python" "llama_cpp")
-if [ "$LLAMA_STATUS" = "installed" ]; then
-    print_info "  ✓ llama.cpp installed"
-else
-    print_warning "  ✗ llama.cpp not installed"
-    if ask_install "Install llama.cpp Python bindings?"; then
-        if [ "$HAS_NVCC" = true ]; then
-            print_info "Building with CUDA support..."
-            run_install 'CMAKE_ARGS="-DLLAMA_CUDA=ON" uv pip install llama-cpp-python[server]'
-        else
-            print_info "Building with CPU optimizations..."
-            run_install 'CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS" uv pip install llama-cpp-python[server]'
-        fi
-    fi
-fi
-# Optional optimization packages
-echo ""
-print_info "Checking optional optimization packages..."
-# ONNX Runtime
-ONNX_STATUS=$(check_package "onnxruntime" "onnxruntime")
-if [ "$ONNX_STATUS" = "installed" ]; then
-    print_info "  ✓ ONNX Runtime"
-else
-    print_warning "  ✗ ONNX Runtime (optional - alternative inference engine)"
-    if ask_install "Install ONNX Runtime (GPU version)?"; then
-        run_install "uv pip install onnxruntime-gpu"
-    fi
-fi
-# Optimum (Hugging Face optimization library)
-OPTIMUM_STATUS=$(check_package "optimum" "optimum")
-if [ "$OPTIMUM_STATUS" = "installed" ]; then
-    print_info "  ✓ Optimum"
-else
-    print_warning "  ✗ Optimum (optional - Hugging Face optimization library)"
-    if ask_install "Install Optimum?"; then
-        run_install "uv pip install optimum"
-    fi
-fi
-# Check all other core packages after inference frameworks
-echo ""
-print_info "Checking core ML packages..."
-# Core packages - install all at once with -U flag
-print_info "Installing core ML packages..."
-if ask_install "Install core ML packages?"; then
-    run_install "uv pip install -U transformers accelerate datasets tokenizers sentencepiece protobuf safetensors huggingface-hub scipy tqdm psutil fastapi uvicorn pydantic aiohttp requests triton kernels"
-    run_install "uv pip install numpy==2.2.6"
-    print_info "✓ Core packages installation complete"
-fi
-
-# Install Triton kernels for MXFP4 compatibility at the very end
-echo ""
-print_info "Installing Triton kernels for MXFP4 compatibility..."
-run_install "uv pip install git+https://github.com/triton-lang/triton.git@main#subdirectory=python/triton_kernels"
-# Summary
-echo ""
-echo "=============================================="
-print_info "Installation Summary:"
-echo ""
-# Quick check of key packages
-print_info "Core ML Stack:"
-for pkg in torch transformers; do
-    if python -c "import $pkg" 2>/dev/null; then
-        version=$(python -c "import $pkg; print($pkg.__version__)" 2>/dev/null || echo "unknown")
-        print_info "  ✓ $pkg ($version)"
-    else
-        print_error "  ✗ $pkg"
-    fi
-done
-echo ""
-print_info "Inference Frameworks:"
-# Check each framework with proper import names
-echo -n "  "
-if python -c "import sglang" 2>/dev/null; then
-    version=$(python -c "import sglang; print(sglang.__version__)" 2>/dev/null || echo "installed")
-    print_info "✓ SGLang ($version)"
-else
-    print_warning "✗ SGLang (optional)"
-fi
-echo -n "  "
-if python -c "import vllm" 2>/dev/null; then
-    version=$(python -c "import vllm; print(vllm.__version__)" 2>/dev/null || echo "installed")
-    if [[ "$version" == *"gptoss"* ]]; then
-        print_info "✓ vLLM ($version) - GPT-OSS enabled"
-    else
-        print_info "✓ vLLM ($version)"
-    fi
-else
-    print_warning "✗ vLLM (optional)"
-fi
-echo -n "  "
-if python -c "import llama_cpp" 2>/dev/null; then
-    print_info "✓ llama-cpp-python"
-else
-    print_warning "✗ llama-cpp-python (optional)"
-fi
-echo ""
-print_info "Optional Optimizations:"
-# Check optimization packages
-echo -n "  "
-if python -c "import onnxruntime" 2>/dev/null; then
-    print_info "✓ ONNX Runtime"
-else
-    print_warning "✗ ONNX Runtime"
-fi
-echo -n "  "
-if python -c "import optimum" 2>/dev/null; then
-    print_info "✓ Optimum"
-else
-    print_warning "✗ Optimum"
-fi
-echo ""
-print_info "Environment Details:"
-print_info "- Python: $(python --version 2>&1)"
-print_info "- Virtual environment: $VIRTUAL_ENV"
-if [ "$HAS_NVCC" = true ]; then
-    print_info "- CUDA toolkit: $(nvcc --version | grep release | awk '{print $6}')"
-else
-    print_info "- CUDA toolkit: Not installed"
-fi
-echo ""
-print_info "To verify GPU availability:"
-print_command "python -c 'import torch; print(f\"CUDA available: {torch.cuda.is_available()}\")'"
+if __name__ == "__main__":
+    sys.exit(main())
