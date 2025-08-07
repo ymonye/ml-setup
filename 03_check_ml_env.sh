@@ -25,7 +25,7 @@ fi
 
 # Parse arguments
 AUTO_MODE=false
-ENV_NAME="ml"
+ENV_TYPE=""
 
 for arg in "$@"; do
     case $arg in
@@ -34,11 +34,60 @@ for arg in "$@"; do
             ;;
         *)
             if [[ ! "$arg" =~ ^-- ]]; then
-                ENV_NAME="$arg"
+                ENV_TYPE="$arg"
             fi
             ;;
     esac
 done
+
+# Prompt for environment type if not provided and not in auto mode
+if [ -z "$ENV_TYPE" ] && [ "$AUTO_MODE" = false ]; then
+    echo ""
+    print_info "Select ML environment type:"
+    echo "1) Transformers"
+    echo "2) vLLM" 
+    echo "3) SGLang"
+    echo ""
+    while true; do
+        read -p "Enter your choice (1-3): " choice
+        case $choice in
+            1)
+                ENV_TYPE="transformers"
+                break
+                ;;
+            2)
+                ENV_TYPE="vllm"
+                break
+                ;;
+            3)
+                ENV_TYPE="sglang"
+                break
+                ;;
+            *)
+                print_error "Invalid choice. Please enter 1, 2, or 3."
+                ;;
+        esac
+    done
+elif [ -z "$ENV_TYPE" ]; then
+    # Default to transformers in auto mode
+    ENV_TYPE="transformers"
+fi
+
+# Set environment name based on type
+case $ENV_TYPE in
+    transformers|1)
+        ENV_NAME="transformers"
+        ;;
+    vllm|2)
+        ENV_NAME="vllm"
+        ;;
+    sglang|3)
+        ENV_NAME="sglang"
+        ;;
+    *)
+        ENV_NAME="$ENV_TYPE"
+        ;;
+esac
 
 ENV_PATH="$HOME/${ENV_NAME}_env"
 

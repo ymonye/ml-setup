@@ -10,13 +10,13 @@ This is a machine learning environment setup collection for Ubuntu 22.04+. It co
 ### Environment Setup (Run in Order)
 1. `./01_check_dependencies.sh [-y]` - Install system packages and CUDA toolkit
 2. `./02_check_python.sh [-y]` - Install Python 3.12 via pyenv and uv package manager
-3. `./03_check_ml_env.sh [--auto] [env_name]` - Create ML virtual environment (default: ml_env)
+3. `./03_check_ml_env.sh [--auto] [env_type]` - Create ML virtual environment (Transformers, vLLM, or SGLang)
 4. `./04_check_ml_packages.sh [-y]` - Install ML packages (PyTorch, SGLang, vLLM, etc.)
 5. `./05_check_final.sh` - Final verification of complete setup
 
 ### Model Management
 - `./install_model.sh [-m model_name] [-p path] [-q quantization]` - Download HuggingFace models
-- `source ./launch_ml_env.sh [env_name]` - Activate ML environment with optimizations
+- `source ./launch_ml_env.sh [env_type]` - Activate ML environment with optimizations
 
 ### Script Arguments
 - `-y` or `--auto`: Auto-accept all prompts (non-interactive mode)
@@ -38,8 +38,9 @@ All scripts follow consistent patterns:
 ### Environment Management
 - Uses pyenv for Python version management (3.12 specifically)
 - Uses uv for fast Python package installation
-- Virtual environments stored as `~/ml_env` (or custom name)
+- Virtual environments stored as `~/transformers_env`, `~/vllm_env`, or `~/sglang_env`
 - Environment variables set for ML optimizations (NUMA, CPU threads, HuggingFace cache)
+- Interactive environment type selection (Transformers, vLLM, SGLang) or direct specification
 
 ### Model Storage Architecture
 - Models stored in `/data/ml/models/huggingface/`
@@ -72,8 +73,8 @@ Scripts configure for 32-core systems:
 # Complete setup from scratch
 ./01_check_dependencies.sh -y
 ./02_check_python.sh -y  
-./03_check_ml_env.sh --auto
-source ~/ml_env/bin/activate  # or use the created alias
+./03_check_ml_env.sh --auto transformers  # or vllm/sglang
+source ~/transformers_env/bin/activate    # or use created alias
 ./04_check_ml_packages.sh -y
 ./05_check_final.sh
 
@@ -81,7 +82,8 @@ source ~/ml_env/bin/activate  # or use the created alias
 ./install_model.sh -m "Qwen/Qwen3-30B-A3B-Instruct-2507"
 
 # Daily usage
-source ./launch_ml_env.sh  # Activates with optimizations
+source ./launch_ml_env.sh transformers  # or vllm/sglang
+# Or use aliases: transformers, vllm, sglang
 ```
 
 ## Error Recovery
