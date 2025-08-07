@@ -85,11 +85,104 @@ echo ""
 # Check inference frameworks
 echo ""
 print_info "Checking inference frameworks..."
+# Function to detect GPU and set TORCH_CUDA_ARCH_LIST
+detect_gpu_arch() {
+    if ! command -v nvidia-smi &> /dev/null; then
+        return 1
+    fi
+    
+    local gpu_name=$(nvidia-smi --query-gpu=name --format=csv,noheader | head -n1)
+    local arch_list=""
+    
+    # Clean up GPU name
+    gpu_name=$(echo "$gpu_name" | tr '[:lower:]' '[:upper:]')
+    
+    print_info "Detected GPU: $gpu_name"
+    
+    # Determine architecture based on GPU model
+    case "$gpu_name" in
+        *"H100"*)
+            arch_list="9.0"
+            print_info "  → H100 (Hopper) detected: sm_90"
+            ;;
+        *"H200"*)
+            arch_list="9.0"
+            print_info "  → H200 (Hopper) detected: sm_90"
+            ;;
+        *"B200"*)
+            arch_list="10.0"
+            print_info "  → B200 (Blackwell) detected: sm_100"
+            ;;
+        *"RTX 4090"*|*"4090"*)
+            arch_list="8.9"
+            print_info "  → RTX 4090 (Ada Lovelace) detected: sm_89"
+            ;;
+        *"RTX 5090"*|*"5090"*)
+            arch_list="12.0"
+            print_info "  → RTX 5090 (Blackwell) detected: sm_120"
+            ;;
+        *"RTX 6000"*|*"RTX A6000"*)
+            # Need to distinguish between Ada and Blackwell versions
+            if [[ "$gpu_name" == *"ADA"* ]]; then
+                arch_list="8.9"
+                print_info "  → RTX 6000 Ada (Ada Lovelace) detected: sm_89"
+            else
+                # Check CUDA version to infer if it's Blackwell
+                local cuda_version=$(nvcc --version 2>/dev/null | grep "release" | awk '{print $6}' | cut -d',' -f1)
+                if [[ "$cuda_version" == "12.8" ]] || [[ "$cuda_version" > "12.8" ]]; then
+                    arch_list="12.0"
+                    print_info "  → RTX 6000 Pro (Blackwell) detected: sm_120"
+                else
+                    arch_list="8.9"
+                    print_info "  → RTX 6000 (Ada Lovelace) detected: sm_89"
+                fi
+            fi
+            ;;
+        *"A100"*)
+            arch_list="8.0"
+            print_info "  → A100 (Ampere) detected: sm_80"
+            ;;
+        *"A10"*|*"A40"*)
+            arch_list="8.6"
+            print_info "  → A10/A40 (Ampere) detected: sm_86"
+            ;;
+        *"V100"*)
+            arch_list="7.0"
+            print_info "  → V100 (Volta) detected: sm_70"
+            ;;
+        *"T4"*)
+            arch_list="7.5"
+            print_info "  → T4 (Turing) detected: sm_75"
+            ;;
+        *"RTX 3090"*|*"3090"*)
+            arch_list="8.6"
+            print_info "  → RTX 3090 (Ampere) detected: sm_86"
+            ;;
+        *"RTX 3080"*|*"3080"*)
+            arch_list="8.6"
+            print_info "  → RTX 3080 (Ampere) detected: sm_86"
+            ;;
+        *)
+            print_warning "  → Unknown GPU model, will use default PyTorch CUDA architectures"
+            return 1
+            ;;
+    esac
+    
+    # Export the architecture list
+    export TORCH_CUDA_ARCH_LIST="$arch_list"
+    print_info "  → Set TORCH_CUDA_ARCH_LIST=$arch_list"
+    
+    return 0
+}
+
 # Check if nvcc is available for optimized builds
 HAS_NVCC=false
 if command -v nvcc &> /dev/null; then
     HAS_NVCC=true
     print_info "✓ CUDA toolkit (nvcc) available"
+    
+    # Detect GPU and set architecture
+    detect_gpu_arch
 else
     print_warning "✗ CUDA toolkit (nvcc) not found - some packages will use fallback versions"
 fi
