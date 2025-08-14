@@ -21,10 +21,10 @@ nvm current # Should print "v22.18.0".
 npm -v # Should print "10.9.3".
 
 # Install Bunch of Coding CLIs:
-npm install -g @openai/codex
 npm install -g @anthropic-ai/claude-code
+npm install -g @charmland/crush
+npm install -g @google/gemini-cli
+npm install -g @openai/codex
+npm install -g @qwen-code/qwen-code
+npm install -g opencode-ai@latest
 curl https://cursor.com/install -fsS | bash
-npm i -g opencode-ai@latest
-
-# Load Claude Code:
-claude
