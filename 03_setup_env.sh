@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Script: create_ml_env.sh
+# Script: 03_setup_env.sh
 # Purpose: Create ML virtual environment and set up environment variables
-# Usage: source create_ml_env.sh [--auto] [env_name]
+# Usage: source 03_setup_env.sh [--auto] [env_name]
 
 # Source bashrc to ensure environment is properly loaded
 if [ -f ~/.bashrc ]; then
@@ -49,27 +49,32 @@ done
 if [ -z "$ENV_TYPE" ] && [ "$AUTO_MODE" = false ]; then
     echo ""
     print_info "Select ML environment type:"
-    echo "1) vLLM"
-    echo "2) SGLang" 
-    echo "3) Transformers"
+    echo "1) vLLM (Regular)"
+    echo "2) vLLM (GPT-OSS)"
+    echo "3) SGLang"
+    echo "4) Transformers"
     echo ""
     while true; do
-        read -p "Enter your choice (1-3): " choice
+        read -p "Enter your choice (1-4): " choice
         case $choice in
             1)
                 ENV_TYPE="vllm"
                 break
                 ;;
             2)
-                ENV_TYPE="sglang"
+                ENV_TYPE="vllm-gptoss"
                 break
                 ;;
             3)
+                ENV_TYPE="sglang"
+                break
+                ;;
+            4)
                 ENV_TYPE="transformers"
                 break
                 ;;
             *)
-                print_error "Invalid choice. Please enter 1, 2, or 3."
+                print_error "Invalid choice. Please enter 1, 2, 3, or 4."
                 ;;
         esac
     done
@@ -83,10 +88,13 @@ case $ENV_TYPE in
     vllm|1)
         ENV_NAME="vllm"
         ;;
-    sglang|2)
+    vllm-gptoss|2)
+        ENV_NAME="vllm_gptoss"
+        ;;
+    sglang|3)
         ENV_NAME="sglang"
         ;;
-    transformers|3)
+    transformers|4)
         ENV_NAME="transformers"
         ;;
     *)
@@ -138,19 +146,40 @@ if ! command -v uv &> /dev/null; then
     fi
 fi
 
-# Create virtual environment
+# Check if environment exists and handle rebuild
 if [ -d "$ENV_PATH" ]; then
-    print_warning "Environment $ENV_PATH already exists."
-    if [ "$AUTO_MODE" = false ] && [ "$BEING_SOURCED" = false ]; then
-        read -p "Do you want to recreate it? (y/n): " RECREATE
+    print_warning "⚠️  Environment $ENV_NAME already exists at $ENV_PATH"
+    
+    if [ "$AUTO_MODE" = false ]; then
+        echo ""
+        print_info "Do you want to rebuild it? This will:"
+        print_info "  • Delete the existing environment directory"
+        print_info "  • Remove all installed packages"
+        print_info "  • Create a fresh environment"
+        echo ""
+        
+        while true; do
+            read -p "Rebuild environment? (y/n): " RECREATE
+            case ${RECREATE,,} in
+                y|yes)
+                    print_info "Destroying existing environment..."
+                    print_command "rm -rf $ENV_PATH"
+                    rm -rf "$ENV_PATH"
+                    print_info "✓ Environment destroyed"
+                    break
+                    ;;
+                n|no)
+                    print_info "Keeping existing environment"
+                    break
+                    ;;
+                *)
+                    print_error "Please answer 'y' for yes or 'n' for no"
+                    ;;
+            esac
+        done
     else
         RECREATE="n"
-        print_info "Using existing environment (use --auto to skip prompts)"
-    fi
-    
-    if [[ "$RECREATE" =~ ^[Yy]$ ]]; then
-        print_info "Removing existing environment..."
-        rm -rf "$ENV_PATH"
+        print_info "Using existing environment (use without --auto to be prompted)"
     fi
 fi
 

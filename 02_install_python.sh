@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script: check_python.sh
+# Script: 02_install_python.sh
 # Purpose: Check and install Python 3.12 via pyenv and uv
 
 # Colors

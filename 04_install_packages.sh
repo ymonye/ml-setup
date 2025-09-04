@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Script: 04.py
+Script: 04_install_packages.py
 Purpose: Install ML packages based on detected Python environment
-Usage: python 04.py [-y]
+Usage: python 04_install_packages.py [-y]
 """
 
 import os
@@ -41,21 +41,25 @@ def detect_environment():
     env_path = Path(virtual_env)
     env_name = env_path.name
     
-    # Check if it's one of our expected environments
-    if 'transformers_env' in str(env_path):
-        return 'transformers_env'
-    elif 'vllm_env' in str(env_path):
-        return 'vllm_env'
+    # Check if it's one of our expected environments (from 03_setup_env.sh)
+    if 'vllm_env' in str(env_path):
+        return 'vllm'
+    elif 'vllm_gptoss_env' in str(env_path):
+        return 'vllm_gptoss'
     elif 'sglang_env' in str(env_path):
-        return 'sglang_env'
+        return 'sglang'
+    elif 'transformers_env' in str(env_path):
+        return 'transformers'
     
     # Also check by exact name match
-    if env_name == 'transformers_env':
-        return 'transformers_env'
-    elif env_name == 'vllm_env':
-        return 'vllm_env'
+    if env_name == 'vllm_env':
+        return 'vllm'
+    elif env_name == 'vllm_gptoss_env':
+        return 'vllm_gptoss'
     elif env_name == 'sglang_env':
-        return 'sglang_env'
+        return 'sglang'
+    elif env_name == 'transformers_env':
+        return 'transformers'
     
     return None
 
@@ -94,6 +98,42 @@ def check_nvcc():
         print_warning("✗ CUDA toolkit (nvcc) not found")
         return False
 
+def install_vllm_packages(auto_yes=False):
+    """Install packages for regular vllm environment"""
+    print_info("Installing packages for vllm_env...")
+    
+    if ask_install("Install vLLM?", auto_yes):
+        cmd = "uv pip install vllm --torch-backend=auto"
+        if not run_command(cmd, "Installing vLLM"):
+            return False
+    
+    return True
+
+def install_vllm_gptoss_packages(auto_yes=False):
+    """Install packages for vllm GPT-OSS environment"""
+    print_info("Installing packages for vllm_gptoss_env...")
+    
+    if ask_install("Install GPT-OSS enabled vLLM?", auto_yes):
+        cmd = ("uv pip install --pre vllm==0.10.1+gptoss "
+               "--extra-index-url https://wheels.vllm.ai/gpt-oss/ "
+               "--extra-index-url https://download.pytorch.org/whl/nightly/cu128 "
+               "--index-strategy unsafe-best-match")
+        if not run_command(cmd, "Installing GPT-OSS enabled vLLM"):
+            return False
+    
+    return True
+
+def install_sglang_packages(auto_yes=False):
+    """Install packages for sglang environment"""
+    print_info("Installing packages for sglang_env...")
+    
+    if ask_install("Install SGLang?", auto_yes):
+        cmd = "uv pip install sglang[all]"
+        if not run_command(cmd, "Installing SGLang"):
+            return False
+    
+    return True
+
 def install_transformers_packages(auto_yes=False):
     """Install packages for transformers environment"""
     print_info("Installing packages for transformers_env...")
@@ -112,25 +152,6 @@ def install_transformers_packages(auto_yes=False):
     
     return True
 
-def install_vllm_packages(auto_yes=False):
-    """Install packages for vllm environment"""
-    print_info("Installing packages for vllm_env...")
-    
-    if ask_install("Install GPT-OSS enabled vLLM?", auto_yes):
-        cmd = ("uv pip install --pre vllm==0.10.1+gptoss "
-               "--extra-index-url https://wheels.vllm.ai/gpt-oss/ "
-               "--extra-index-url https://download.pytorch.org/whl/nightly/cu128 "
-               "--index-strategy unsafe-best-match")
-        if not run_command(cmd, "Installing GPT-OSS enabled vLLM"):
-            return False
-    
-    return True
-
-def install_sglang_packages(auto_yes=False):
-    """Install packages for sglang environment"""
-    print_info("SGLang environment detected - no specific packages to install at this time")
-    return True
-
 def main():
     parser = argparse.ArgumentParser(description='Install ML packages based on environment')
     parser.add_argument('-y', '--yes', action='store_true', 
@@ -141,9 +162,10 @@ def main():
     if not os.environ.get('VIRTUAL_ENV'):
         print_error("No virtual environment activated!")
         print_info("Please activate one of the following environments:")
-        print_command("source ~/transformers_env/bin/activate")
         print_command("source ~/vllm_env/bin/activate")
+        print_command("source ~/vllm_gptoss_env/bin/activate")
         print_command("source ~/sglang_env/bin/activate")
+        print_command("source ~/transformers_env/bin/activate")
         return 1
     
     print_info(f"Virtual environment: {os.environ['VIRTUAL_ENV']}")
@@ -154,7 +176,7 @@ def main():
     
     if not env_type:
         print_error("Current environment is not one of the expected ML environments!")
-        print_info("Expected one of: transformers_env, vllm_env, sglang_env")
+        print_info("Expected one of: vllm_env, vllm_gptoss_env, sglang_env, transformers_env")
         print_info(f"Current environment: {os.environ.get('VIRTUAL_ENV', 'None')}")
         return 1
     
@@ -176,12 +198,14 @@ def main():
     # Install packages based on environment
     success = False
     
-    if env_type == 'transformers_env':
-        success = install_transformers_packages(args.yes)
-    elif env_type == 'vllm_env':
+    if env_type == 'vllm':
         success = install_vllm_packages(args.yes)
-    elif env_type == 'sglang_env':
+    elif env_type == 'vllm_gptoss':
+        success = install_vllm_gptoss_packages(args.yes)
+    elif env_type == 'sglang':
         success = install_sglang_packages(args.yes)
+    elif env_type == 'transformers':
+        success = install_transformers_packages(args.yes)
     
     # Summary
     print()

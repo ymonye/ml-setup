@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Script: launch_ml_env.sh
+# Script: launch_env.sh
 # Purpose: Activate ML environment with all optimizations
-# Usage: source launch_ml_env.sh [--auto] [env_name]
+# Usage: source launch_env.sh [--auto] [env_name]
 
 # Source bashrc to ensure environment is properly loaded
 if [ -f ~/.bashrc ]; then
@@ -49,27 +49,32 @@ done
 if [ -z "$ENV_TYPE" ] && [ "$AUTO_MODE" = false ]; then
     echo ""
     print_info "Select ML environment type:"
-    echo "1) vLLM"
-    echo "2) SGLang" 
-    echo "3) Transformers"
+    echo "1) vLLM (Regular)"
+    echo "2) vLLM (GPT-OSS)"
+    echo "3) SGLang"
+    echo "4) Transformers"
     echo ""
     while true; do
-        read -p "Enter your choice (1-3): " choice
+        read -p "Enter your choice (1-4): " choice
         case $choice in
             1)
                 ENV_TYPE="vllm"
                 break
                 ;;
             2)
-                ENV_TYPE="sglang"
+                ENV_TYPE="vllm-gptoss"
                 break
                 ;;
             3)
+                ENV_TYPE="sglang"
+                break
+                ;;
+            4)
                 ENV_TYPE="transformers"
                 break
                 ;;
             *)
-                print_error "Invalid choice. Please enter 1, 2, or 3."
+                print_error "Invalid choice. Please enter 1, 2, 3, or 4."
                 ;;
         esac
     done
@@ -83,10 +88,13 @@ case $ENV_TYPE in
     vllm|1)
         ENV_NAME="vllm"
         ;;
-    sglang|2)
+    vllm-gptoss|2)
+        ENV_NAME="vllm_gptoss"
+        ;;
+    sglang|3)
         ENV_NAME="sglang"
         ;;
-    transformers|3)
+    transformers|4)
         ENV_NAME="transformers"
         ;;
     *)
@@ -99,7 +107,7 @@ ENV_PATH="$HOME/${ENV_NAME}_env"
 # Check if environment exists
 if [ ! -d "$ENV_PATH" ]; then
     print_error "Environment '$ENV_NAME' not found at $ENV_PATH"
-    print_info "Run create_ml_env.sh first to create it"
+    print_info "Run 03_setup_env.sh first to create it"
     return 1
 fi
 

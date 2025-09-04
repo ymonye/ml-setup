@@ -410,10 +410,10 @@ if [ "$MISSING_DEPS" = true ]; then
     fi
     print_info ""
     print_info "For complete setup, run these scripts in order:"
-    print_info "1. ./check_dependencies.sh    # System packages + CUDA"
-    print_info "2. ./check_python.sh          # Python toolchain"
-    print_info "3. ./create_ml_env.sh         # Virtual environment"
-    print_info "4. ./check_ml_packages.sh     # ML packages"
+    print_info "1. ./01_install_dependencies.sh    # System packages + CUDA"
+    print_info "2. ./02_install_python.sh          # Python toolchain"
+    print_info "3. ./03_setup_env.sh                # Virtual environment"
+    print_info "4. ./04_install_packages.sh        # ML packages"
 else
     print_info "✅ All dependencies satisfied!"
     echo ""

@@ -9,7 +9,7 @@ NC='\033[0m' # No Color
 
 # Default values
 DEFAULT_MODEL_PATH="/data/ml/models"
-DEFAULT_MODEL="openai/gpt-oss-120b"
+DEFAULT_MODEL="PrimeIntellect/INTELLECT-2"
 
 # Function to print colored output
 print_info() {
@@ -67,7 +67,7 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "Examples:"
             echo "  $0"
-            echo "  $0 -m 'openai/gpt-oss-20b'"
+            echo "  $0 -m 'PrimeIntellect/INTELLECT-2'"
             echo "  $0 -m 'Qwen/Qwen3-30B-A3B-Instruct-2507' -q GGUF"
             echo "  $0 -m 'deepseek-ai/DeepSeek-V3' -p /mnt/storage/models"
             exit 0
@@ -106,11 +106,11 @@ if [ -z "$VIRTUAL_ENV" ]; then
 fi
 
 # Check if required packages are installed
-python3 -c "import transformers, torch, huggingface_hub" 2>/dev/null
+python3 -c "import huggingface_hub" 2>/dev/null
 if [ $? -ne 0 ]; then
-    print_error "Required Python packages not installed"
+    print_error "Required Python package not installed"
     print_info "Please install with:"
-    print_info "  uv pip install transformers torch huggingface-hub"
+    print_info "  uv pip install huggingface-hub"
     exit 1
 fi
 
@@ -121,46 +121,89 @@ if [ -z "$MODEL_NAME" ]; then
     echo "----------------------------------------"
     echo ""
     echo "Popular models:"
-    echo "1) openai/gpt-oss-120b (OpenAI GPT OSS 120B) - DEFAULT"
-    echo "2) openai/gpt-oss-20b (OpenAI GPT OSS 20B)"
-    echo "3) Qwen/Qwen3-Coder-480B-A35B-Instruct (Qwen3 480B Coder)"
-    echo "4) Qwen/Qwen3-Coder-30B-A3B-Instruct (Qwen3 30B Coder)"
-    echo "5) Qwen/Qwen3-235B-A22B-Instruct-2507 (Qwen3 235B Instruct)"
-    echo "6) Qwen/Qwen3-30B-A3B-Instruct-2507 (Qwen3 30B Instruct)"
-    echo "7) Qwen/Qwen3-235B-A22B-Thinking-2507 (Qwen3 235B Thinking)"
-    echo "8) moonshotai/Kimi-K2-Instruct (Kimi K2 Instruct)"
-    echo "9) moonshotai/Kimi-K2-Base (Kimi K2 Base)"
-    echo "10) deepseek-ai/DeepSeek-R1-0528 (DeepSeek R1)"
-    echo "11) deepseek-ai/DeepSeek-V3 (DeepSeek V3)"
-    echo "12) zai-org/GLM-4.5 (GLM 4.5)"
-    echo "13) zai-org/GLM-4.1V-9B-Thinking (GLM 4.1V 9B Thinking)"
-    echo "14) zai-org/GLM-4.5-Air (GLM 4.5 Air)"
-    echo "15) zai-org/GLM-4.5-FP8 (GLM 4.5 FP8)"
-    echo "16) zai-org/GLM-4.5-Air-FP8 (GLM 4.5 Air FP8)"
-    echo "17) zai-org/GLM-4.5-Base (GLM 4.5 Base)"
-    echo "18) Custom (enter your own)"
     echo ""
-    read -p "Select model (1-18) or press Enter for default [openai/gpt-oss-120b]: " choice
+    echo "Prime Intellect Models:"
+    echo "1) PrimeIntellect/INTELLECT-2 (INTELLECT-2 32B) - DEFAULT"
+    echo ""
+    echo "OpenAI Models:"
+    echo "2) openai/gpt-oss-20b (OpenAI GPT OSS 20B)"
+    echo "3) openai/gpt-oss-120b (OpenAI GPT OSS 120B)"
+    echo ""
+    echo "DeepSeek Models:"
+    echo "4) deepseek-ai/DeepSeek-V3 (DeepSeek V3)"
+    echo "5) deepseek-ai/DeepSeek-R1-0528 (DeepSeek R1)"
+    echo ""
+    echo "Moonshot AI Models:"
+    echo "6) moonshotai/Kimi-K2-Base (Kimi K2 Base)"
+    echo "7) moonshotai/Kimi-K2-Instruct (Kimi K2 Instruct)"
+    echo ""
+    echo "Qwen Models:"
+    echo "8) Qwen/Qwen3-30B-A3B-Instruct-2507 (Qwen3 30B Instruct)"
+    echo "9) Qwen/Qwen3-30B-A3B-Instruct-2507-FP8 (Qwen3 30B Instruct FP8)"
+    echo "10) Qwen/Qwen3-30B-A3B-Thinking-2507 (Qwen3 30B Thinking)"
+    echo "11) Qwen/Qwen3-30B-A3B-Thinking-2507-FP8 (Qwen3 30B Thinking FP8)"
+    echo "12) Qwen/Qwen3-235B-A22B-Instruct-2507 (Qwen3 235B Instruct)"
+    echo "13) Qwen/Qwen3-235B-A22B-Instruct-2507-FP8 (Qwen3 235B Instruct FP8)"
+    echo "14) Qwen/Qwen3-235B-A22B-Thinking-2507 (Qwen3 235B Thinking)"
+    echo "15) Qwen/Qwen3-235B-A22B-Thinking-2507-FP8 (Qwen3 235B Thinking FP8)"
+    echo "16) Qwen/Qwen3-Coder-30B-A3B-Instruct (Qwen3 30B Coder)"
+    echo "17) Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8 (Qwen3 30B Coder FP8)"
+    echo "18) Qwen/Qwen3-Coder-480B-A35B-Instruct (Qwen3 480B Coder)"
+    echo "19) Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8 (Qwen3 480B Coder FP8)"
+    echo ""
+    echo "GLM Models:"
+    echo "20) zai-org/GLM-4.1V-9B-Thinking (GLM 4.1V 9B Thinking)"
+    echo "21) zai-org/GLM-4.5 (GLM 4.5)"
+    echo "22) zai-org/GLM-4.5-FP8 (GLM 4.5 FP8)"
+    echo "23) zai-org/GLM-4.5-Air (GLM 4.5 Air)"
+    echo "24) zai-org/GLM-4.5-Air-FP8 (GLM 4.5 Air FP8)"
+    echo "25) zai-org/GLM-4.5-Base (GLM 4.5 Base)"
+    echo ""
+    echo "Hermes Models:"
+    echo "26) NousResearch/Hermes-4-14B (Hermes 4 14B)"
+    echo "27) NousResearch/Hermes-4-14B-FP8 (Hermes 4 14B FP8)"
+    echo "28) NousResearch/Hermes-4-70B (Hermes 4 70B)"
+    echo "29) NousResearch/Hermes-4-70B-FP8 (Hermes 4 70B FP8)"
+    echo "30) NousResearch/Hermes-4-405B (Hermes 4 405B)"
+    echo "31) NousResearch/Hermes-4-405B-FP8 (Hermes 4 405B FP8)"
+    echo ""
+    echo "32) Custom (enter your own)"
+    echo ""
+    read -p "Select model (1-32) or press Enter for default [PrimeIntellect/INTELLECT-2]: " choice
     
     case $choice in
-        1|"") MODEL_NAME="openai/gpt-oss-120b" ;;
+        1|"") MODEL_NAME="PrimeIntellect/INTELLECT-2" ;;
         2) MODEL_NAME="openai/gpt-oss-20b" ;;
-        3) MODEL_NAME="Qwen/Qwen3-Coder-480B-A35B-Instruct" ;;
-        4) MODEL_NAME="Qwen/Qwen3-Coder-30B-A3B-Instruct" ;;
-        5) MODEL_NAME="Qwen/Qwen3-235B-A22B-Instruct-2507" ;;
-        6) MODEL_NAME="Qwen/Qwen3-30B-A3B-Instruct-2507" ;;
-        7) MODEL_NAME="Qwen/Qwen3-235B-A22B-Thinking-2507" ;;
-        8) MODEL_NAME="moonshotai/Kimi-K2-Instruct" ;;
-        9) MODEL_NAME="moonshotai/Kimi-K2-Base" ;;
-        10) MODEL_NAME="deepseek-ai/DeepSeek-R1-0528" ;;
-        11) MODEL_NAME="deepseek-ai/DeepSeek-V3" ;;
-        12) MODEL_NAME="zai-org/GLM-4.5" ;;
-        13) MODEL_NAME="zai-org/GLM-4.1V-9B-Thinking" ;;
-        14) MODEL_NAME="zai-org/GLM-4.5-Air" ;;
-        15) MODEL_NAME="zai-org/GLM-4.5-FP8" ;;
-        16) MODEL_NAME="zai-org/GLM-4.5-Air-FP8" ;;
-        17) MODEL_NAME="zai-org/GLM-4.5-Base" ;;
-        18) 
+        3) MODEL_NAME="openai/gpt-oss-120b" ;;
+        4) MODEL_NAME="deepseek-ai/DeepSeek-V3" ;;
+        5) MODEL_NAME="deepseek-ai/DeepSeek-R1-0528" ;;
+        6) MODEL_NAME="moonshotai/Kimi-K2-Base" ;;
+        7) MODEL_NAME="moonshotai/Kimi-K2-Instruct" ;;
+        8) MODEL_NAME="Qwen/Qwen3-30B-A3B-Instruct-2507" ;;
+        9) MODEL_NAME="Qwen/Qwen3-30B-A3B-Instruct-2507-FP8" ;;
+        10) MODEL_NAME="Qwen/Qwen3-30B-A3B-Thinking-2507" ;;
+        11) MODEL_NAME="Qwen/Qwen3-30B-A3B-Thinking-2507-FP8" ;;
+        12) MODEL_NAME="Qwen/Qwen3-235B-A22B-Instruct-2507" ;;
+        13) MODEL_NAME="Qwen/Qwen3-235B-A22B-Instruct-2507-FP8" ;;
+        14) MODEL_NAME="Qwen/Qwen3-235B-A22B-Thinking-2507" ;;
+        15) MODEL_NAME="Qwen/Qwen3-235B-A22B-Thinking-2507-FP8" ;;
+        16) MODEL_NAME="Qwen/Qwen3-Coder-30B-A3B-Instruct" ;;
+        17) MODEL_NAME="Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8" ;;
+        18) MODEL_NAME="Qwen/Qwen3-Coder-480B-A35B-Instruct" ;;
+        19) MODEL_NAME="Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8" ;;
+        20) MODEL_NAME="zai-org/GLM-4.1V-9B-Thinking" ;;
+        21) MODEL_NAME="zai-org/GLM-4.5" ;;
+        22) MODEL_NAME="zai-org/GLM-4.5-FP8" ;;
+        23) MODEL_NAME="zai-org/GLM-4.5-Air" ;;
+        24) MODEL_NAME="zai-org/GLM-4.5-Air-FP8" ;;
+        25) MODEL_NAME="zai-org/GLM-4.5-Base" ;;
+        26) MODEL_NAME="NousResearch/Hermes-4-14B" ;;
+        27) MODEL_NAME="NousResearch/Hermes-4-14B-FP8" ;;
+        28) MODEL_NAME="NousResearch/Hermes-4-70B" ;;
+        29) MODEL_NAME="NousResearch/Hermes-4-70B-FP8" ;;
+        30) MODEL_NAME="NousResearch/Hermes-4-405B" ;;
+        31) MODEL_NAME="NousResearch/Hermes-4-405B-FP8" ;;
+        32) 
             read -p "Enter model name (e.g., organization/model-name): " MODEL_NAME
             ;;
         *)
@@ -208,18 +251,19 @@ cat > "$PYTHON_SCRIPT" << EOF
 import os
 import sys
 import json
+import hashlib
 from pathlib import Path
+from datetime import datetime
 
 # Set environment variables before imports
 os.environ['HF_HOME'] = '$MODEL_PATH/huggingface'
 
 try:
-    from huggingface_hub import snapshot_download, HfApi
-    from transformers import AutoConfig
-    import torch
+    from huggingface_hub import snapshot_download, HfApi, scan_cache_dir
+    from huggingface_hub.utils import LocalEntryNotFoundError
 except ImportError as e:
     print(f"Error: Missing required package: {e}")
-    print("Please install with: uv pip install transformers torch huggingface-hub")
+    print("Please install with: uv pip install huggingface-hub")
     sys.exit(1)
 
 model_name = "$MODEL_NAME"
@@ -229,56 +273,137 @@ print(f"Model: {model_name}")
 print(f"Download location: {os.environ['HF_HOME']}")
 print(f"{'='*60}\\n")
 
-try:
-    # Check if model exists and get info
-    api = HfApi()
+def check_model_completeness(model_name, cache_dir):
+    """
+    Check if model is already fully downloaded and verify integrity
+    """
     try:
-        model_info = api.model_info(model_name)
+        api = HfApi()
         
-        # Calculate total size properly
+        # Get expected files from remote
+        print("Checking remote repository...")
+        remote_info = api.model_info(model_name)
+        expected_files = {}
         total_size = 0
-        for sibling in model_info.siblings:
-            if hasattr(sibling, 'size') and sibling.size is not None:
-                total_size += sibling.size
         
-        if total_size > 0:
-            print(f"Total model size: {total_size / 1e9:.1f} GB")
+        for sibling in remote_info.siblings:
+            if hasattr(sibling, 'rfilename') and hasattr(sibling, 'size'):
+                expected_files[sibling.rfilename] = {
+                    'size': sibling.size,
+                    'lfs': getattr(sibling, 'lfs', None)
+                }
+                if sibling.size:
+                    total_size += sibling.size
+        
+        print(f"Expected model size: {total_size / 1e9:.1f} GB")
+        print(f"Number of files expected: {len(expected_files)}")
+        
+        # Check local cache
+        print("\\nChecking local cache...")
+        cache_info = scan_cache_dir(cache_dir)
+        
+        # Find our model in cache
+        local_model = None
+        for repo in cache_info.repos:
+            if repo.repo_id == model_name:
+                local_model = repo
+                break
+        
+        if not local_model:
+            print("Model not found in local cache")
+            return False, expected_files, 0
+        
+        # Check each expected file
+        missing_files = []
+        corrupted_files = []
+        local_size = 0
+        
+        for filename, file_info in expected_files.items():
+            file_found = False
+            for revision in local_model.revisions:
+                for cached_file in revision.files:
+                    # Match by file path
+                    if cached_file.file_path.name == filename.split('/')[-1]:
+                        file_found = True
+                        local_size += cached_file.size_on_disk
+                        
+                        # Check file size
+                        if file_info['size'] and cached_file.size_on_disk != file_info['size']:
+                            corrupted_files.append(filename)
+                            print(f"  ❌ Size mismatch: {filename}")
+                            print(f"     Expected: {file_info['size']}, Got: {cached_file.size_on_disk}")
+                        break
+                if file_found:
+                    break
+            
+            if not file_found:
+                missing_files.append(filename)
+                print(f"  ❌ Missing: {filename}")
+        
+        # Summary
+        print(f"\\nLocal cache summary:")
+        print(f"  Total size on disk: {local_size / 1e9:.1f} GB")
+        print(f"  Files found: {len(expected_files) - len(missing_files)}/{len(expected_files)}")
+        
+        if missing_files:
+            print(f"  Missing files: {len(missing_files)}")
+            for f in missing_files[:5]:  # Show first 5 missing
+                print(f"    - {f}")
+            if len(missing_files) > 5:
+                print(f"    ... and {len(missing_files) - 5} more")
+        
+        if corrupted_files:
+            print(f"  Corrupted files: {len(corrupted_files)}")
+            for f in corrupted_files[:5]:
+                print(f"    - {f}")
+        
+        is_complete = len(missing_files) == 0 and len(corrupted_files) == 0
+        
+        if is_complete:
+            print("\\n✅ Model is fully downloaded and verified!")
+            # Get the local path
+            try:
+                from huggingface_hub import model_info
+                local_path = snapshot_download(
+                    repo_id=model_name,
+                    cache_dir=cache_dir,
+                    local_files_only=True
+                )
+                return True, expected_files, local_size, local_path
+            except:
+                return True, expected_files, local_size, None
+        else:
+            print("\\n⚠️  Model is incomplete or has corrupted files")
+            return False, expected_files, local_size
+    
     except Exception as e:
-        print(f"Could not fetch model info: {e}")
+        print(f"Error checking model completeness: {e}")
+        return False, {}, 0
+
+# Check if model is already downloaded
+result = check_model_completeness(model_name, os.environ['HF_HOME'])
+
+if len(result) == 4 and result[0]:  # Model is complete
+    is_complete, expected_files, local_size, local_path = result
+    print("\\n" + "="*60)
+    print("MODEL ALREADY FULLY DOWNLOADED")
+    print("="*60)
+    print(f"Model: {model_name}")
+    if local_path:
+        print(f"Location: {local_path}")
+    print(f"Size: {local_size / 1e9:.1f} GB")
+    print("\\nNo download needed - model is ready to use!")
     
-    # Download model (without deprecated resume_download parameter)
-    print(f"\\nDownloading {model_name}...")
-    local_path = snapshot_download(
-        repo_id=model_name,
-        cache_dir=os.environ['HF_HOME'],
-        max_workers=4
-    )
-    
-    print(f"\\n✓ Model downloaded to: {local_path}")
-    
-    # Test loading config - with better error handling
-    print("\\nTesting model configuration...")
-    try:
-        config = AutoConfig.from_pretrained(model_name, cache_dir=os.environ['HF_HOME'], trust_remote_code=True)
-        print(f"✓ Model type: {config.model_type}")
-        print(f"✓ Hidden size: {getattr(config, 'hidden_size', 'N/A')}")
-        print(f"✓ Number of layers: {getattr(config, 'num_hidden_layers', 'N/A')}")
-    except KeyError as e:
-        print(f"⚠️  Model uses custom architecture '{e.args[0]}' - may require custom code to load")
-        print("✓ Model files downloaded successfully anyway!")
-    except Exception as e:
-        print(f"⚠️  Could not load config: {e}")
-        print("✓ Model files downloaded successfully anyway!")
-    
-    # Save model info
+    # Save to downloaded_models.json
     info_file = Path("$MODEL_PATH") / "downloaded_models.json"
     model_info_data = {
         "model_name": model_name,
-        "local_path": local_path,
-        "cache_dir": os.environ['HF_HOME']
+        "local_path": local_path if local_path else "cached",
+        "cache_dir": os.environ['HF_HOME'],
+        "size_gb": local_size / 1e9,
+        "verified_at": datetime.now().isoformat()
     }
     
-    # Append to existing file
     existing_data = []
     if info_file.exists():
         with open(info_file, 'r') as f:
@@ -287,20 +412,133 @@ try:
             except:
                 existing_data = []
     
-    # Add new entry (avoid duplicates)
-    if not any(m['model_name'] == model_name for m in existing_data):
+    # Update or add entry
+    model_found = False
+    for i, m in enumerate(existing_data):
+        if m['model_name'] == model_name:
+            existing_data[i] = model_info_data
+            model_found = True
+            break
+    
+    if not model_found:
         existing_data.append(model_info_data)
     
     with open(info_file, 'w') as f:
         json.dump(existing_data, f, indent=2)
     
-    print(f"\\n✓ Model info saved to: {info_file}")
-    print("\\n✅ Download completed successfully!")
+    sys.exit(0)
+
+# Model is not complete, proceed with download
+print("\\n" + "="*60)
+print("STARTING DOWNLOAD")
+print("="*60)
+
+# Create a progress file to track download
+progress_file = Path("$MODEL_PATH") / f".download_progress_{model_name.replace('/', '_')}.json"
+
+try:
+    # Save download start info
+    progress_data = {
+        "model_name": model_name,
+        "started_at": datetime.now().isoformat(),
+        "status": "downloading"
+    }
+    with open(progress_file, 'w') as f:
+        json.dump(progress_data, f, indent=2)
+    
+    print(f"\\nDownloading {model_name}...")
+    print("Note: Download will resume automatically if interrupted")
+    
+    # Download with resume capability
+    local_path = snapshot_download(
+        repo_id=model_name,
+        cache_dir=os.environ['HF_HOME'],
+        max_workers=4,
+        force_download=False,  # This allows resuming
+        local_files_only=False
+    )
+    
+    print(f"\\n✓ Model downloaded to: {local_path}")
+    
+    # Verify completeness after download
+    print("\\nVerifying download...")
+    final_check = check_model_completeness(model_name, os.environ['HF_HOME'])
+    
+    if final_check[0]:
+        print("\\n✅ Download completed and verified successfully!")
+        
+        # Update progress file
+        progress_data['status'] = 'completed'
+        progress_data['completed_at'] = datetime.now().isoformat()
+        progress_data['local_path'] = local_path
+        with open(progress_file, 'w') as f:
+            json.dump(progress_data, f, indent=2)
+        
+        # Save model info
+        info_file = Path("$MODEL_PATH") / "downloaded_models.json"
+        model_info_data = {
+            "model_name": model_name,
+            "local_path": local_path,
+            "cache_dir": os.environ['HF_HOME'],
+            "downloaded_at": datetime.now().isoformat()
+        }
+        
+        # Append to existing file
+        existing_data = []
+        if info_file.exists():
+            with open(info_file, 'r') as f:
+                try:
+                    existing_data = json.load(f)
+                except:
+                    existing_data = []
+        
+        # Update or add entry
+        model_found = False
+        for i, m in enumerate(existing_data):
+            if m['model_name'] == model_name:
+                existing_data[i] = model_info_data
+                model_found = True
+                break
+        
+        if not model_found:
+            existing_data.append(model_info_data)
+        
+        with open(info_file, 'w') as f:
+            json.dump(existing_data, f, indent=2)
+        
+        print(f"\\n✓ Model info saved to: {info_file}")
+        
+        # Clean up progress file
+        if progress_file.exists():
+            progress_file.unlink()
+    else:
+        print("\\n⚠️  Download may be incomplete. Run this script again to resume.")
+        progress_data['status'] = 'incomplete'
+        with open(progress_file, 'w') as f:
+            json.dump(progress_data, f, indent=2)
+    
+except KeyboardInterrupt:
+    print("\\n⚠️  Download interrupted by user")
+    print("Run this script again to resume the download")
+    if progress_file.exists():
+        progress_data['status'] = 'interrupted'
+        progress_data['interrupted_at'] = datetime.now().isoformat()
+        with open(progress_file, 'w') as f:
+            json.dump(progress_data, f, indent=2)
+    sys.exit(130)
     
 except Exception as e:
     print(f"\\n❌ Error downloading model: {e}")
     import traceback
     traceback.print_exc()
+    
+    if progress_file.exists():
+        progress_data['status'] = 'error'
+        progress_data['error'] = str(e)
+        progress_data['error_at'] = datetime.now().isoformat()
+        with open(progress_file, 'w') as f:
+            json.dump(progress_data, f, indent=2)
+    
     sys.exit(1)
 EOF
 
