@@ -53,9 +53,10 @@ if [ -z "$ENV_TYPE" ] && [ "$AUTO_MODE" = false ]; then
     echo "2) vLLM (GPT-OSS)"
     echo "3) SGLang"
     echo "4) Transformers"
+    echo "5) GLM 4.5"
     echo ""
     while true; do
-        read -p "Enter your choice (1-4): " choice
+        read -p "Enter your choice (1-5): " choice
         case $choice in
             1)
                 ENV_TYPE="vllm"
@@ -73,8 +74,12 @@ if [ -z "$ENV_TYPE" ] && [ "$AUTO_MODE" = false ]; then
                 ENV_TYPE="transformers"
                 break
                 ;;
+            5)
+                ENV_TYPE="glm_4.5"
+                break
+                ;;
             *)
-                print_error "Invalid choice. Please enter 1, 2, 3, or 4."
+                print_error "Invalid choice. Please enter 1, 2, 3, 4, or 5."
                 ;;
         esac
     done
@@ -96,6 +101,9 @@ case $ENV_TYPE in
         ;;
     transformers|4)
         ENV_NAME="transformers"
+        ;;
+    glm_4.5|5)
+        ENV_NAME="glm_4.5"
         ;;
     *)
         ENV_NAME="$ENV_TYPE"
@@ -330,11 +338,6 @@ EOF
     fi
 fi
 
-# Add alias if not present
-if ! grep -q "alias $ENV_NAME=" ~/.bashrc; then
-    echo "alias $ENV_NAME='source $ENV_PATH/activate_ml'" >> ~/.bashrc
-    print_info "Added alias '$ENV_NAME' to ~/.bashrc"
-fi
 
 # Create directory structure
 print_info "Creating directory structure..."

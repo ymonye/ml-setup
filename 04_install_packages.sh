@@ -44,6 +44,8 @@ def detect_environment():
     # Check if it's one of our expected environments (from 03_setup_env.sh)
     if 'vllm_env' in str(env_path):
         return 'vllm'
+    elif 'glm_4.5_env' in str(env_path):
+        return 'glm_4.5'
     elif 'vllm_gptoss_env' in str(env_path):
         return 'vllm_gptoss'
     elif 'sglang_env' in str(env_path):
@@ -54,6 +56,8 @@ def detect_environment():
     # Also check by exact name match
     if env_name == 'vllm_env':
         return 'vllm'
+    elif env_name == 'glm_4.5_env':
+        return 'glm_4.5'
     elif env_name == 'vllm_gptoss_env':
         return 'vllm_gptoss'
     elif env_name == 'sglang_env':
@@ -106,6 +110,32 @@ def install_vllm_packages(auto_yes=False):
         cmd = "uv pip install vllm --torch-backend=auto"
         if not run_command(cmd, "Installing vLLM"):
             return False
+    
+    return True
+
+def install_glm_4_5_packages(auto_yes=False):
+    """Install packages for GLM 4.5 environment"""
+    print_info("Installing packages for glm_4.5_env...")
+    
+    # Install main requirements
+    requirements = [
+        "transformers>=4.55.3",
+        "pre-commit>=4.2.0",
+        "accelerate>=1.10.0",
+        "sglang>=0.5.1",
+        "vllm>=0.10.1.1"
+    ]
+    
+    if ask_install("Install GLM 4.5 environment packages?", auto_yes):
+        cmd = f"uv pip install {' '.join(requirements)}"
+        if not run_command(cmd, "Installing GLM 4.5 requirements"):
+            return False
+    
+    # Install vLLM with streaming tool call support
+    if ask_install("Install vLLM nightly for streaming tool call support?", auto_yes):
+        cmd = "uv pip install -U vllm --pre --extra-index-url https://wheels.vllm.ai/nightly"
+        if not run_command(cmd, "Installing vLLM nightly for streaming tool call support"):
+            print_warning("vLLM nightly installation failed, but continuing...")
     
     return True
 
@@ -166,6 +196,7 @@ def main():
         print_command("source ~/vllm_gptoss_env/bin/activate")
         print_command("source ~/sglang_env/bin/activate")
         print_command("source ~/transformers_env/bin/activate")
+        print_command("source ~/glm_4.5_env/bin/activate")
         return 1
     
     print_info(f"Virtual environment: {os.environ['VIRTUAL_ENV']}")
@@ -176,7 +207,7 @@ def main():
     
     if not env_type:
         print_error("Current environment is not one of the expected ML environments!")
-        print_info("Expected one of: vllm_env, vllm_gptoss_env, sglang_env, transformers_env")
+        print_info("Expected one of: vllm_env, vllm_gptoss_env, sglang_env, transformers_env, glm_4.5_env")
         print_info(f"Current environment: {os.environ.get('VIRTUAL_ENV', 'None')}")
         return 1
     
@@ -200,6 +231,8 @@ def main():
     
     if env_type == 'vllm':
         success = install_vllm_packages(args.yes)
+    elif env_type == 'glm_4.5':
+        success = install_glm_4_5_packages(args.yes)
     elif env_type == 'vllm_gptoss':
         success = install_vllm_gptoss_packages(args.yes)
     elif env_type == 'sglang':
