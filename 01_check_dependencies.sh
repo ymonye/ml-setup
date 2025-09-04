@@ -123,9 +123,23 @@ fi
 
 # Check for CUDA toolkit (nvcc)
 CUDA_MISSING=false
+CUDA_VERSION_OK=false
 if command -v nvcc &> /dev/null; then
     CUDA_VERSION=$(nvcc --version | grep "release" | awk '{print $6}' | cut -d',' -f1)
     print_info "  ✓ CUDA toolkit (nvcc) - version $CUDA_VERSION"
+    
+    # Check if installed CUDA version needs upgrade to 12.9
+    CUDA_VERSION_MAJOR=$(echo $CUDA_VERSION | cut -d. -f1 | sed 's/V//')
+    CUDA_VERSION_MINOR=$(echo $CUDA_VERSION | cut -d. -f2)
+    
+    if [ "$CUDA_VERSION_MAJOR" -gt 12 ] || ([ "$CUDA_VERSION_MAJOR" -eq 12 ] && [ "$CUDA_VERSION_MINOR" -ge 9 ]); then
+        CUDA_VERSION_OK=true
+        print_info "  ✓ CUDA version $CUDA_VERSION is 12.9 or newer"
+    else
+        print_warning "  ⚠ CUDA version $CUDA_VERSION is older than 12.9"
+        print_warning "  Will upgrade to CUDA 12.9 for better compatibility"
+        CUDA_MISSING=true  # Treat as missing to trigger upgrade
+    fi
 else
     print_error "  ✗ CUDA toolkit (nvcc)"
     CUDA_MISSING=true
@@ -140,7 +154,11 @@ else
         print_warning "Missing ${#MISSING_PACKAGES[@]} packages: ${MISSING_PACKAGES[*]}"
     fi
     if [ "$CUDA_MISSING" = true ]; then
-        print_warning "CUDA toolkit (nvcc) not found - required for GPU-optimized packages"
+        if command -v nvcc &> /dev/null; then
+            print_warning "CUDA toolkit needs upgrade to version 12.9"
+        else
+            print_warning "CUDA toolkit (nvcc) not found - required for GPU-optimized packages"
+        fi
     fi
     echo ""
     
@@ -158,8 +176,19 @@ else
             
             # Clean apt cache first if low on space
             if [ "$AVAILABLE_SPACE" -lt 10 ]; then
-                print_info "Cleaning apt cache to free space..."
-                sudo apt clean
+                if [ "$AUTO_YES" = true ]; then
+                    CLEAN_CACHE="y"
+                else
+                    print_warning "Low disk space (${AVAILABLE_SPACE}GB). Clean apt cache to free space?"
+                    read -p "Clean apt cache? (y/n): " CLEAN_CACHE
+                fi
+                
+                if [[ "$CLEAN_CACHE" =~ ^[Yy]$ ]]; then
+                    print_info "Cleaning apt cache to free space..."
+                    sudo apt clean
+                else
+                    print_warning "Proceeding without cleaning apt cache - installation may fail if space runs out"
+                fi
             fi
             
             # Prevent service restarts
@@ -179,6 +208,26 @@ else
             fi
         fi
         
+        # Install tmux configuration
+        if [ "$INSTALL_SUCCESS" = true ]; then
+            if [ ! -f ~/.tmux.conf ] || ! grep -q "set -g mouse on" ~/.tmux.conf 2>/dev/null; then
+                if [ "$AUTO_YES" = true ]; then
+                    SETUP_TMUX="y"
+                else
+                    read -p "Setup tmux mouse support in ~/.tmux.conf? (y/n): " SETUP_TMUX
+                fi
+                
+                if [[ "$SETUP_TMUX" =~ ^[Yy]$ ]]; then
+                    echo "set -g mouse on" >> ~/.tmux.conf
+                    print_info "✓ Added mouse support to ~/.tmux.conf"
+                else
+                    print_info "Skipped tmux configuration"
+                fi
+            else
+                print_info "✓ Mouse support already configured in ~/.tmux.conf"
+            fi
+        fi
+        
         # Check and fix gcc/g++ version mismatch after package installation
         if [ "$INSTALL_SUCCESS" = true ]; then
             print_info "Checking gcc/g++ version compatibility..."
@@ -192,68 +241,71 @@ else
                 if command -v g++-$GCC_VERSION &> /dev/null; then
                     print_info "✓ g++-$GCC_VERSION already available"
                 else
-                    print_info "Installing g++-$GCC_VERSION to match gcc-$GCC_VERSION..."
-                    if sudo NEEDRESTART_MODE=l apt install -y g++-$GCC_VERSION; then
-                        print_info "✓ g++-$GCC_VERSION installed"
-                        
-                        # Set as default g++ compiler for CUDA compatibility
-                        if sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-$GCC_VERSION 100; then
-                            print_info "✓ Set g++-$GCC_VERSION as default g++ compiler"
+                    if [ "$AUTO_YES" = true ]; then
+                        INSTALL_GPP="y"
+                    else
+                        read -p "Install g++-$GCC_VERSION to match gcc-$GCC_VERSION? (y/n): " INSTALL_GPP
+                    fi
+                    
+                    if [[ "$INSTALL_GPP" =~ ^[Yy]$ ]]; then
+                        print_info "Installing g++-$GCC_VERSION to match gcc-$GCC_VERSION..."
+                        if sudo NEEDRESTART_MODE=l apt install -y g++-$GCC_VERSION; then
+                            print_info "✓ g++-$GCC_VERSION installed"
+                            
+                            # Ask about setting as default
+                            if [ "$AUTO_YES" = true ]; then
+                                SET_DEFAULT="y"
+                            else
+                                read -p "Set g++-$GCC_VERSION as default g++ compiler? (y/n): " SET_DEFAULT
+                            fi
+                            
+                            if [[ "$SET_DEFAULT" =~ ^[Yy]$ ]]; then
+                                if sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-$GCC_VERSION 100; then
+                                    print_info "✓ Set g++-$GCC_VERSION as default g++ compiler"
+                                else
+                                    print_warning "Could not set g++-$GCC_VERSION as default"
+                                fi
+                            else
+                                print_info "Skipped setting g++-$GCC_VERSION as default"
+                            fi
                         else
-                            print_warning "Could not set g++-$GCC_VERSION as default"
+                            print_warning "Could not install g++-$GCC_VERSION - CUDA compilation may fail"
                         fi
                     else
-                        print_warning "Could not install g++-$GCC_VERSION - CUDA compilation may fail"
+                        print_warning "Skipped g++-$GCC_VERSION installation - CUDA compilation may fail"
                     fi
                 fi
             fi
         fi
         
-        # Install CUDA toolkit if missing
+        # Install/Upgrade CUDA toolkit if missing or needs upgrade
         if [ "$CUDA_MISSING" = true ] && [ "$INSTALL_SUCCESS" = true ]; then
             echo ""
             
-            # Determine which CUDA version to install based on driver
-            TARGET_CUDA_VERSION=""
+            # Always target CUDA 12.9 for upgrades/installs
+            TARGET_CUDA_VERSION="12.9"
+            
+            # Check if driver supports CUDA 12.9
             if [ -n "$DRIVER_CUDA_VERSION" ]; then
-                # Extract major.minor version from driver's supported CUDA
                 DRIVER_CUDA_MAJOR=$(echo $DRIVER_CUDA_VERSION | cut -d. -f1)
                 DRIVER_CUDA_MINOR=$(echo $DRIVER_CUDA_VERSION | cut -d. -f2)
                 
                 print_info "Driver supports CUDA $DRIVER_CUDA_VERSION"
                 
-                # Map driver CUDA version to available toolkit versions
-                # We'll try to install the highest compatible version
-                if [ "$DRIVER_CUDA_MAJOR" -ge 13 ]; then
-                    TARGET_CUDA_VERSION="13.0"
-                elif [ "$DRIVER_CUDA_MAJOR" -eq 12 ]; then
-                    if [ "$DRIVER_CUDA_MINOR" -ge 9 ]; then
-                        TARGET_CUDA_VERSION="12.9"
-                    elif [ "$DRIVER_CUDA_MINOR" -ge 6 ]; then
-                        TARGET_CUDA_VERSION="12.6"
-                    elif [ "$DRIVER_CUDA_MINOR" -ge 3 ]; then
-                        TARGET_CUDA_VERSION="12.3"
-                    elif [ "$DRIVER_CUDA_MINOR" -ge 2 ]; then
-                        TARGET_CUDA_VERSION="12.2"
-                    elif [ "$DRIVER_CUDA_MINOR" -ge 1 ]; then
-                        TARGET_CUDA_VERSION="12.1"
-                    else
-                        TARGET_CUDA_VERSION="12.0"
-                    fi
-                elif [ "$DRIVER_CUDA_MAJOR" -eq 11 ]; then
-                    TARGET_CUDA_VERSION="11.8"
-                else
-                    print_warning "Driver CUDA version $DRIVER_CUDA_VERSION is very old"
-                    TARGET_CUDA_VERSION="11.8"
+                if [ "$DRIVER_CUDA_MAJOR" -lt 12 ] || ([ "$DRIVER_CUDA_MAJOR" -eq 12 ] && [ "$DRIVER_CUDA_MINOR" -lt 9 ]); then
+                    print_warning "Driver only supports CUDA $DRIVER_CUDA_VERSION, which is older than 12.9"
+                    print_warning "CUDA 12.9 installation may fail. Consider updating your NVIDIA driver first."
+                    # Still attempt to install 12.9 as it might work with newer runtime compatibility
                 fi
             else
-                # No driver detected or couldn't determine version
-                # Default to CUDA 12.3 for modern GPUs like H100/H200
-                print_info "No driver version detected, defaulting to CUDA 12.3 for H100/H200 compatibility"
-                TARGET_CUDA_VERSION="12.3"
+                print_info "No driver version detected, will attempt CUDA 12.9 installation"
             fi
             
-            print_info "Target CUDA toolkit version: $TARGET_CUDA_VERSION"
+            if command -v nvcc &> /dev/null; then
+                print_info "Will upgrade from CUDA $CUDA_VERSION to $TARGET_CUDA_VERSION"
+            else
+                print_info "Will install CUDA toolkit version: $TARGET_CUDA_VERSION"
+            fi
             
             if [ "$AUTO_YES" = true ]; then
                 INSTALL_CUDA="y"
@@ -406,12 +458,23 @@ else
                                     if [ "$CUDA_INSTALLED" = true ]; then
                                         # Add CUDA to PATH if not already there
                                         if ! grep -q "/usr/local/cuda/bin" ~/.bashrc; then
-                                            echo '' >> ~/.bashrc
-                                            echo '# CUDA toolkit' >> ~/.bashrc
-                                            echo 'export PATH="/usr/local/cuda/bin:$PATH"' >> ~/.bashrc
-                                            echo 'export LD_LIBRARY_PATH="/usr/local/cuda/lib64:$LD_LIBRARY_PATH"' >> ~/.bashrc
-                                            print_info "Added CUDA to PATH in ~/.bashrc"
-                                            print_info "Run 'source ~/.bashrc' or start a new terminal to use nvcc"
+                                            if [ "$AUTO_YES" = true ]; then
+                                                ADD_CUDA_PATH="y"
+                                            else
+                                                read -p "Add CUDA to PATH in ~/.bashrc? (y/n): " ADD_CUDA_PATH
+                                            fi
+                                            
+                                            if [[ "$ADD_CUDA_PATH" =~ ^[Yy]$ ]]; then
+                                                echo '' >> ~/.bashrc
+                                                echo '# CUDA toolkit' >> ~/.bashrc
+                                                echo 'export PATH="/usr/local/cuda/bin:$PATH"' >> ~/.bashrc
+                                                echo 'export LD_LIBRARY_PATH="/usr/local/cuda/lib64:$LD_LIBRARY_PATH"' >> ~/.bashrc
+                                                print_info "Added CUDA to PATH in ~/.bashrc"
+                                                print_info "Run 'source ~/.bashrc' or start a new terminal to use nvcc"
+                                            else
+                                                print_info "Skipped adding CUDA to PATH"
+                                                print_info "You can manually add /usr/local/cuda/bin to your PATH later"
+                                            fi
                                         fi
                                         break
                                     fi

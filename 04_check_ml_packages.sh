@@ -82,78 +82,6 @@ def ask_install(prompt, auto_yes=False):
     response = input(f"{prompt} (y/n): ").strip().lower()
     return response in ['y', 'yes']
 
-def detect_gpu_arch():
-    """Detect GPU architecture and set TORCH_CUDA_ARCH_LIST"""
-    try:
-        # Check if nvidia-smi is available
-        result = subprocess.run(['nvidia-smi', '--query-gpu=name', '--format=csv,noheader'],
-                              capture_output=True, text=True, check=True)
-        gpu_name = result.stdout.strip().split('\n')[0].upper()
-        
-        print_info(f"Detected GPU: {gpu_name}")
-        
-        arch_list = ""
-        
-        # Determine architecture based on GPU model (ordered by compute capability)
-        
-        # sm_70 (7.0) - Volta Architecture
-        if "V100" in gpu_name:
-            arch_list = "7.0"
-            print_info(f"  → {gpu_name} (Volta) detected: sm_70")
-        
-        # sm_75 (7.5) - Turing Architecture
-        elif "T4" in gpu_name or \
-             ("RTX 5000" in gpu_name and "ADA" not in gpu_name) or \
-             ("RTX 4000" in gpu_name and "ADA" not in gpu_name) or \
-             ("RTX 6000" in gpu_name and "ADA" not in gpu_name):
-            arch_list = "7.5"
-            print_info(f"  → {gpu_name} (Turing) detected: sm_75")
-        
-        # sm_80 (8.0) - Ampere Architecture (Data Center)
-        elif any(x in gpu_name for x in ["A100", "A30"]):
-            arch_list = "8.0"
-            print_info(f"  → {gpu_name} (Ampere) detected: sm_80")
-        
-        # sm_86 (8.6) - Ampere Architecture (Consumer & Professional)
-        elif any(x in gpu_name for x in ["RTX 3090", "3090", "RTX 3080", "3080", "RTX 3070", "3070",
-                                          "RTX A6000", "A6000", "RTX A5000", "A5000", "RTX A4500", "A4500",
-                                          "RTX A4000", "A4000", "RTX A2000", "A2000", "A10", "A40"]):
-            arch_list = "8.6"
-            print_info(f"  → {gpu_name} (Ampere) detected: sm_86")
-        
-        # sm_89 (8.9) - Ada Lovelace Architecture
-        elif any(x in gpu_name for x in ["RTX 4090", "4090", "RTX 4070 TI", "4070 TI", "L40S", "L40", "L4"]) or \
-             ("RTX 6000" in gpu_name and "ADA" in gpu_name) or \
-             ("RTX 5000" in gpu_name and "ADA" in gpu_name) or \
-             ("RTX 4000" in gpu_name and "ADA" in gpu_name):
-            arch_list = "8.9"
-            print_info(f"  → {gpu_name} (Ada Lovelace) detected: sm_89")
-        
-        # sm_90 (9.0) - Hopper Architecture
-        elif any(x in gpu_name for x in ["H100", "H200", "GH200"]):
-            arch_list = "9.0"
-            print_info(f"  → {gpu_name} (Hopper) detected: sm_90")
-        
-        # sm_100 (10.0) - Blackwell Architecture
-        elif "B200" in gpu_name:
-            arch_list = "10.0"
-            print_info(f"  → {gpu_name} (Blackwell) detected: sm_100")
-        
-        # sm_120 (12.0) - Blackwell Architecture (RTX 50 series)
-        elif any(x in gpu_name for x in ["RTX 5090", "5090"]):
-            arch_list = "12.0"
-            print_info(f"  → {gpu_name} (Blackwell) detected: sm_120")
-        else:
-            print_warning("  → Unknown GPU model, will use default PyTorch CUDA architectures")
-            return None
-        
-        # Set environment variable
-        os.environ['TORCH_CUDA_ARCH_LIST'] = arch_list
-        print_info(f"  → Set TORCH_CUDA_ARCH_LIST={arch_list}")
-        return arch_list
-        
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return None
 
 def check_nvcc():
     """Check if nvcc is available"""
@@ -233,10 +161,16 @@ def main():
     print_info(f"Detected environment type: {env_type}")
     print()
     
-    # Check for CUDA and set architecture if available
+    # Check for CUDA
     has_nvcc = check_nvcc()
-    if has_nvcc:
-        detect_gpu_arch()
+    print()
+    
+    # Check if TORCH_CUDA_ARCH_LIST is set
+    arch_list = os.environ.get('TORCH_CUDA_ARCH_LIST')
+    if arch_list:
+        print_info(f"Using TORCH_CUDA_ARCH_LIST={arch_list} from environment")
+    else:
+        print_info("TORCH_CUDA_ARCH_LIST not set - PyTorch will use default architectures")
     print()
     
     # Install packages based on environment

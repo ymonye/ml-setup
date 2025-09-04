@@ -4,6 +4,11 @@
 # Purpose: Create ML virtual environment and set up environment variables
 # Usage: source create_ml_env.sh [--auto] [env_name]
 
+# Source bashrc to ensure environment is properly loaded
+if [ -f ~/.bashrc ]; then
+    source ~/.bashrc
+fi
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -44,23 +49,23 @@ done
 if [ -z "$ENV_TYPE" ] && [ "$AUTO_MODE" = false ]; then
     echo ""
     print_info "Select ML environment type:"
-    echo "1) Transformers"
-    echo "2) vLLM" 
-    echo "3) SGLang"
+    echo "1) vLLM"
+    echo "2) SGLang" 
+    echo "3) Transformers"
     echo ""
     while true; do
         read -p "Enter your choice (1-3): " choice
         case $choice in
             1)
-                ENV_TYPE="transformers"
-                break
-                ;;
-            2)
                 ENV_TYPE="vllm"
                 break
                 ;;
-            3)
+            2)
                 ENV_TYPE="sglang"
+                break
+                ;;
+            3)
+                ENV_TYPE="transformers"
                 break
                 ;;
             *)
@@ -69,20 +74,20 @@ if [ -z "$ENV_TYPE" ] && [ "$AUTO_MODE" = false ]; then
         esac
     done
 elif [ -z "$ENV_TYPE" ]; then
-    # Default to transformers in auto mode
-    ENV_TYPE="transformers"
+    # Default to vllm in auto mode
+    ENV_TYPE="vllm"
 fi
 
 # Set environment name based on type
 case $ENV_TYPE in
-    transformers|1)
-        ENV_NAME="transformers"
-        ;;
-    vllm|2)
+    vllm|1)
         ENV_NAME="vllm"
         ;;
-    sglang|3)
+    sglang|2)
         ENV_NAME="sglang"
+        ;;
+    transformers|3)
+        ENV_NAME="transformers"
         ;;
     *)
         ENV_NAME="$ENV_TYPE"
@@ -90,6 +95,27 @@ case $ENV_TYPE in
 esac
 
 ENV_PATH="$HOME/${ENV_NAME}_env"
+
+# Ask for HuggingFace model storage location
+DEFAULT_HF_PATH="/data/ml/models/huggingface"
+if [ "$AUTO_MODE" = false ]; then
+    echo ""
+    print_info "Where would you like to store HuggingFace models?"
+    print_info "Default: $DEFAULT_HF_PATH"
+    read -p "Enter path (press Enter for default): " HF_PATH_INPUT
+    
+    if [ -z "$HF_PATH_INPUT" ]; then
+        HF_PATH="$DEFAULT_HF_PATH"
+        print_info "Using default path: $HF_PATH"
+    else
+        # Expand tilde if present
+        HF_PATH="${HF_PATH_INPUT/#\~/$HOME}"
+        print_info "Using custom path: $HF_PATH"
+    fi
+else
+    HF_PATH="$DEFAULT_HF_PATH"
+    print_info "Using default HuggingFace path: $HF_PATH"
+fi
 
 # Check prerequisites
 print_info "Checking prerequisites..."
@@ -144,6 +170,81 @@ if [ ! -d "$ENV_PATH" ]; then
     fi
 fi
 
+# Detect GPU architecture
+print_info "Detecting GPU architecture..."
+TORCH_CUDA_ARCH_LIST=""
+
+if command -v nvidia-smi &> /dev/null; then
+    GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1 | tr '[:lower:]' '[:upper:]')
+    
+    if [ -n "$GPU_NAME" ]; then
+        print_info "Detected GPU: $GPU_NAME"
+        
+        # Determine architecture based on GPU model
+        if [[ "$GPU_NAME" == *"V100"* ]]; then
+            TORCH_CUDA_ARCH_LIST="7.0"
+            print_info "  → $GPU_NAME (Volta) detected: sm_70"
+            
+        elif [[ "$GPU_NAME" == *"T4"* ]] || \
+             ([[ "$GPU_NAME" == *"RTX 5000"* ]] && [[ "$GPU_NAME" != *"ADA"* ]]) || \
+             ([[ "$GPU_NAME" == *"RTX 4000"* ]] && [[ "$GPU_NAME" != *"ADA"* ]]) || \
+             ([[ "$GPU_NAME" == *"RTX 6000"* ]] && [[ "$GPU_NAME" != *"ADA"* ]]); then
+            TORCH_CUDA_ARCH_LIST="7.5"
+            print_info "  → $GPU_NAME (Turing) detected: sm_75"
+            
+        elif [[ "$GPU_NAME" == *"A100"* ]] || [[ "$GPU_NAME" == *"A30"* ]]; then
+            TORCH_CUDA_ARCH_LIST="8.0"
+            print_info "  → $GPU_NAME (Ampere) detected: sm_80"
+            
+        elif [[ "$GPU_NAME" == *"RTX 3090"* ]] || [[ "$GPU_NAME" == *"3090"* ]] || \
+             [[ "$GPU_NAME" == *"RTX 3080"* ]] || [[ "$GPU_NAME" == *"3080"* ]] || \
+             [[ "$GPU_NAME" == *"RTX 3070"* ]] || [[ "$GPU_NAME" == *"3070"* ]] || \
+             [[ "$GPU_NAME" == *"RTX A6000"* ]] || [[ "$GPU_NAME" == *"A6000"* ]] || \
+             [[ "$GPU_NAME" == *"RTX A5000"* ]] || [[ "$GPU_NAME" == *"A5000"* ]] || \
+             [[ "$GPU_NAME" == *"RTX A4500"* ]] || [[ "$GPU_NAME" == *"A4500"* ]] || \
+             [[ "$GPU_NAME" == *"RTX A4000"* ]] || [[ "$GPU_NAME" == *"A4000"* ]] || \
+             [[ "$GPU_NAME" == *"RTX A2000"* ]] || [[ "$GPU_NAME" == *"A2000"* ]] || \
+             [[ "$GPU_NAME" == *"A10"* ]] || [[ "$GPU_NAME" == *"A40"* ]]; then
+            TORCH_CUDA_ARCH_LIST="8.6"
+            print_info "  → $GPU_NAME (Ampere) detected: sm_86"
+            
+        elif [[ "$GPU_NAME" == *"RTX 4090"* ]] || [[ "$GPU_NAME" == *"4090"* ]] || \
+             [[ "$GPU_NAME" == *"RTX 4070 TI"* ]] || [[ "$GPU_NAME" == *"4070 TI"* ]] || \
+             [[ "$GPU_NAME" == *"L40S"* ]] || [[ "$GPU_NAME" == *"L40"* ]] || [[ "$GPU_NAME" == *"L4"* ]] || \
+             ([[ "$GPU_NAME" == *"RTX 6000"* ]] && [[ "$GPU_NAME" == *"ADA"* ]]) || \
+             ([[ "$GPU_NAME" == *"RTX 5000"* ]] && [[ "$GPU_NAME" == *"ADA"* ]]) || \
+             ([[ "$GPU_NAME" == *"RTX 4000"* ]] && [[ "$GPU_NAME" == *"ADA"* ]]); then
+            TORCH_CUDA_ARCH_LIST="8.9"
+            print_info "  → $GPU_NAME (Ada Lovelace) detected: sm_89"
+            
+        elif [[ "$GPU_NAME" == *"H100"* ]] || [[ "$GPU_NAME" == *"H200"* ]] || [[ "$GPU_NAME" == *"GH200"* ]]; then
+            TORCH_CUDA_ARCH_LIST="9.0"
+            print_info "  → $GPU_NAME (Hopper) detected: sm_90"
+            
+        elif [[ "$GPU_NAME" == *"B200"* ]]; then
+            TORCH_CUDA_ARCH_LIST="10.0"
+            print_info "  → $GPU_NAME (Blackwell) detected: sm_100"
+            
+        elif [[ "$GPU_NAME" == *"RTX 5090"* ]] || [[ "$GPU_NAME" == *"5090"* ]]; then
+            TORCH_CUDA_ARCH_LIST="12.0"
+            print_info "  → $GPU_NAME (Blackwell) detected: sm_120"
+            
+        else
+            print_warning "  → Unknown GPU model, will use default PyTorch CUDA architectures"
+        fi
+        
+        if [ -n "$TORCH_CUDA_ARCH_LIST" ]; then
+            print_info "  → Set TORCH_CUDA_ARCH_LIST=$TORCH_CUDA_ARCH_LIST"
+        fi
+    else
+        print_warning "Could not detect GPU name"
+    fi
+else
+    print_warning "nvidia-smi not found - no GPU detected"
+fi
+
+echo ""
+
 # Create activation script with environment variables
 print_info "Creating activation script with ML environment variables..."
 
@@ -153,8 +254,8 @@ cat > "$ENV_PATH/activate_ml" << EOF
 source "$ENV_PATH/bin/activate"
 
 # Set ML environment variables
-export HF_HOME="/data/ml/models/huggingface"
-export HUGGINGFACE_HUB_CACHE="/data/ml/models/huggingface"
+export HF_HOME="$HF_PATH"
+export HUGGINGFACE_HUB_CACHE="$HF_PATH"
 
 # CPU optimization for 32 cores
 export OMP_NUM_THREADS=32
@@ -170,10 +271,14 @@ export OMP_PLACES=cores
 # Memory optimization
 export MALLOC_ARENA_MAX=2
 
+# GPU architecture for PyTorch
+${TORCH_CUDA_ARCH_LIST:+export TORCH_CUDA_ARCH_LIST="$TORCH_CUDA_ARCH_LIST"}
+
 echo "ML environment activated with:"
 echo "  - Virtual env: $ENV_PATH"
-echo "  - HF_HOME: \$HF_HOME"
+echo "  - HF_HOME: $HF_PATH"
 echo "  - CPU threads: 32"
+${TORCH_CUDA_ARCH_LIST:+echo "  - TORCH_CUDA_ARCH_LIST: $TORCH_CUDA_ARCH_LIST"}
 echo "  - Python: \$(python --version)"
 EOF
 
@@ -183,13 +288,17 @@ chmod +x "$ENV_PATH/activate_ml"
 print_info "Updating ~/.bashrc with environment variables..."
 
 if ! grep -q "HF_HOME=" ~/.bashrc; then
-    cat >> ~/.bashrc << 'EOF'
+    cat >> ~/.bashrc << EOF
 
 # ML Environment Variables
-export HF_HOME="/data/ml/models/huggingface"
-export HUGGINGFACE_HUB_CACHE="/data/ml/models/huggingface"
+export HF_HOME="$HF_PATH"
+export HUGGINGFACE_HUB_CACHE="$HF_PATH"
+${TORCH_CUDA_ARCH_LIST:+export TORCH_CUDA_ARCH_LIST="$TORCH_CUDA_ARCH_LIST"}
 EOF
     print_info "Added HF_HOME to ~/.bashrc"
+    if [ -n "$TORCH_CUDA_ARCH_LIST" ]; then
+        print_info "Added TORCH_CUDA_ARCH_LIST to ~/.bashrc"
+    fi
 fi
 
 # Add alias if not present
@@ -200,10 +309,14 @@ fi
 
 # Create directory structure
 print_info "Creating directory structure..."
+# Get parent directories from HF_PATH
+HF_PARENT=$(dirname "$HF_PATH")
+HF_GRANDPARENT=$(dirname "$HF_PARENT")
+
 DIRS=(
-    "/data/ml"
-    "/data/ml/models"
-    "/data/ml/models/huggingface"
+    "$HF_GRANDPARENT"
+    "$HF_PARENT"
+    "$HF_PATH"
     "/data/ml/scripts"
     "/data/ml/logs"
 )
@@ -228,8 +341,8 @@ if [ "$BEING_SOURCED" = true ]; then
     source "$ENV_PATH/bin/activate"
     
     # Set environment variables
-    export HF_HOME="/data/ml/models/huggingface"
-    export HUGGINGFACE_HUB_CACHE="/data/ml/models/huggingface"
+    export HF_HOME="$HF_PATH"
+    export HUGGINGFACE_HUB_CACHE="$HF_PATH"
     export OMP_NUM_THREADS=32
     export MKL_NUM_THREADS=32
     export OPENBLAS_NUM_THREADS=32
@@ -238,6 +351,12 @@ if [ "$BEING_SOURCED" = true ]; then
     export OMP_PROC_BIND=true
     export OMP_PLACES=cores
     export MALLOC_ARENA_MAX=2
+    
+    # Set GPU architecture if detected
+    if [ -n "$TORCH_CUDA_ARCH_LIST" ]; then
+        export TORCH_CUDA_ARCH_LIST="$TORCH_CUDA_ARCH_LIST"
+        print_info "  TORCH_CUDA_ARCH_LIST: $TORCH_CUDA_ARCH_LIST"
+    fi
     
     echo ""
     print_info "✓ Environment activated!"
