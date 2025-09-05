@@ -49,17 +49,17 @@ done
 if [ -z "$ENV_TYPE" ] && [ "$AUTO_MODE" = false ]; then
     echo ""
     print_info "Select ML environment type:"
-    echo "1) vLLM (Regular)"
-    echo "2) vLLM (GPT-OSS)"
+    echo "1) GLM 4.5"
+    echo "2) GPT-OSS"
     echo "3) SGLang"
     echo "4) Transformers"
-    echo "5) GLM 4.5"
+    echo "5) vLLM"
     echo ""
     while true; do
         read -p "Enter your choice (1-5): " choice
         case $choice in
             1)
-                ENV_TYPE="vllm"
+                ENV_TYPE="glm_4.5"
                 break
                 ;;
             2)
@@ -75,7 +75,7 @@ if [ -z "$ENV_TYPE" ] && [ "$AUTO_MODE" = false ]; then
                 break
                 ;;
             5)
-                ENV_TYPE="glm_4.5"
+                ENV_TYPE="vllm"
                 break
                 ;;
             *)

@@ -18,19 +18,48 @@ AUTO_YES=false
 if [[ "$1" == "-y" ]]; then
     AUTO_YES=true
 fi
-# Check Ubuntu version first
-print_info "Checking Ubuntu version..."
+# Check OS version first
+print_info "Checking OS version..."
 if [ ! -f /etc/os-release ]; then
     print_error "Cannot determine OS version. /etc/os-release not found."
     exit 1
 fi
 source /etc/os-release
 VERSION_MAJOR=$(echo $VERSION_ID | cut -d. -f1)
-if [ "$ID" != "ubuntu" ] || [ "$VERSION_MAJOR" -lt 22 ]; then
-    print_error "This script requires Ubuntu 22.04 or newer. Detected: $ID $VERSION_ID"
+
+# Detect OS type and set package manager
+OS_TYPE=""
+PKG_MANAGER=""
+PKG_INSTALL_CMD=""
+PKG_UPDATE_CMD=""
+PKG_QUERY_CMD=""
+
+if [ "$ID" = "ubuntu" ]; then
+    if [ "$VERSION_MAJOR" -lt 22 ]; then
+        print_error "This script requires Ubuntu 22.04 or newer. Detected: $ID $VERSION_ID"
+        exit 1
+    fi
+    OS_TYPE="ubuntu"
+    PKG_MANAGER="apt"
+    PKG_INSTALL_CMD="sudo NEEDRESTART_MODE=l apt install -y"
+    PKG_UPDATE_CMD="sudo NEEDRESTART_MODE=l apt update"
+    PKG_QUERY_CMD="dpkg -l"
+    print_info "✓ Ubuntu $VERSION_ID detected"
+elif [[ "$ID" =~ ^(rhel|rocky|almalinux)$ ]]; then
+    if [ "$VERSION_MAJOR" -lt 9 ]; then
+        print_error "This script requires RHEL/Rocky/AlmaLinux 9 or newer. Detected: $ID $VERSION_ID"
+        exit 1
+    fi
+    OS_TYPE="rhel"
+    PKG_MANAGER="dnf"
+    PKG_INSTALL_CMD="sudo dnf install -y"
+    PKG_UPDATE_CMD="sudo dnf makecache"
+    PKG_QUERY_CMD="rpm -qa"
+    print_info "✓ $NAME $VERSION_ID detected"
+else
+    print_error "Unsupported OS. This script supports Ubuntu 22.04+ and RHEL/Rocky/AlmaLinux 9+. Detected: $ID $VERSION_ID"
     exit 1
 fi
-print_info "✓ Ubuntu $VERSION_ID detected"
 echo ""
 # Check disk space
 print_info "Checking disk space..."
@@ -44,62 +73,87 @@ else
     print_info "✓ Disk space: ${AVAILABLE_SPACE}GB available"
 fi
 echo ""
-# System packages
-SYSTEM_PACKAGES=(
-    # Essential build tools
-    "build-essential"
-    "gcc"
-    "g++"
-    "make"
-    "cmake"
-    
-    # Linear algebra libraries
-    "libopenblas-dev"
-    "libblas-dev"
-    "liblapack-dev"
-    "libatlas-base-dev"
-    "gfortran"
-    
-    # NUMA optimization
-    "numactl"
-    "libnuma-dev"
-    
-    # Image processing
-    "libjpeg-dev"
-    "libpng-dev"
-    "libtiff-dev"
-    "libavcodec-dev"
-    "libavformat-dev"
-    "libswscale-dev"
-    
-    # Other dependencies
-    "libhdf5-dev"
-    "libssl-dev"
-    "libffi-dev"
-    "liblzma-dev"
-    "libbz2-dev"
-    "libreadline-dev"
-    "libsqlite3-dev"
-    "libncurses-dev"
-    "zlib1g-dev"
-    
-    # Tools
-    "curl"
-    "wget"
-    "git"
-    "htop"
-    "tmux"
-    "pkg-config"
-)
+# System packages - define based on OS type
+if [ "$OS_TYPE" = "ubuntu" ]; then
+    SYSTEM_PACKAGES=(
+        # Essential build tools
+        "build-essential"
+        "gcc"
+        "g++"
+        "make"
+        "cmake"
+        
+        # NUMA optimization
+        "numactl"
+        "libnuma-dev"
+        
+        # Essential Python dependencies
+        "libssl-dev"
+        "libffi-dev"
+        "liblzma-dev"
+        "libbz2-dev"
+        "libreadline-dev"
+        "libsqlite3-dev"
+        "libncurses-dev"
+        "zlib1g-dev"
+        
+        # Tools
+        "curl"
+        "wget"
+        "git"
+        "htop"
+        "tmux"
+        "pkg-config"
+    )
+elif [ "$OS_TYPE" = "rhel" ]; then
+    SYSTEM_PACKAGES=(
+        # Essential build tools
+        "gcc"
+        "gcc-c++"
+        "make"
+        "cmake"
+        
+        # NUMA optimization
+        "numactl"
+        "numactl-devel"
+        
+        # Essential Python dependencies
+        "openssl-devel"
+        "libffi-devel"
+        "zlib-devel"
+        "xz-devel"
+        "bzip2-devel"
+        "readline-devel"
+        "ncurses-devel"
+        "sqlite-devel"
+        
+        # Tools
+        "curl"
+        "wget"
+        "git"
+        "htop"
+        "tmux"
+        "pkgconf-pkg-config"
+    )
+fi
 # Check packages
 print_info "Checking system dependencies..."
 MISSING_PACKAGES=()
 for pkg in "${SYSTEM_PACKAGES[@]}"; do
-    if dpkg -l 2>/dev/null | grep -q "^ii  $pkg"; then
-        print_info "  ✓ $pkg"
-    else
-        print_error "  ✗ $pkg"
-        MISSING_PACKAGES+=($pkg)
+    if [ "$OS_TYPE" = "ubuntu" ]; then
+        if dpkg -l 2>/dev/null | grep -q "^ii  $pkg"; then
+            print_info "  ✓ $pkg"
+        else
+            print_error "  ✗ $pkg"
+            MISSING_PACKAGES+=($pkg)
+        fi
+    elif [ "$OS_TYPE" = "rhel" ]; then
+        if rpm -qa | grep -q "^$pkg"; then
+            print_info "  ✓ $pkg"
+        else
+            print_error "  ✗ $pkg"
+            MISSING_PACKAGES+=($pkg)
+        fi
     fi
 done
 # Check CUDA driver and toolkit
@@ -118,7 +172,7 @@ if command -v nvidia-smi &> /dev/null; then
     fi
 else
     print_warning "  ⚠ No NVIDIA driver detected (nvidia-smi not found)"
-    print_info "  Will default to CUDA 12.3 for H100/H200 compatibility"
+    print_info "  Will default to CUDA 12.9 for H100/H200 compatibility"
 fi
 
 # Check for CUDA toolkit (nvcc)
@@ -191,20 +245,52 @@ else
                 fi
             fi
             
-            # Prevent service restarts
-            print_info "Note: Using NEEDRESTART_MODE=l to prevent automatic service restarts"
-            sudo NEEDRESTART_MODE=l apt update
+            # Update package lists
+            if [ "$OS_TYPE" = "ubuntu" ]; then
+                print_info "Note: Using NEEDRESTART_MODE=l to prevent automatic service restarts"
+                sudo NEEDRESTART_MODE=l apt update
+            elif [ "$OS_TYPE" = "rhel" ]; then
+                sudo dnf makecache
+            fi
             
             if [ $? -ne 0 ]; then
-                print_error "apt update failed - check your internet connection and disk space"
+                print_error "Package update failed - check your internet connection and disk space"
                 INSTALL_SUCCESS=false
             else
-                sudo NEEDRESTART_MODE=l apt install -y ${MISSING_PACKAGES[*]}
+                if [ "$OS_TYPE" = "ubuntu" ]; then
+                    sudo NEEDRESTART_MODE=l apt install -y ${MISSING_PACKAGES[*]}
+                elif [ "$OS_TYPE" = "rhel" ]; then
+                    sudo dnf install -y ${MISSING_PACKAGES[*]}
+                fi
                 
                 if [ $? -ne 0 ]; then
                     print_error "Failed to install some packages"
                     INSTALL_SUCCESS=false
                 fi
+            fi
+        fi
+        
+        # Install ibtop - Network monitoring tool
+        if [ "$INSTALL_SUCCESS" = true ]; then
+            if ! command -v ibtop &> /dev/null; then
+                if [ "$AUTO_YES" = true ]; then
+                    INSTALL_IBTOP="y"
+                else
+                    read -p "Install ibtop (network monitoring tool)? (y/n): " INSTALL_IBTOP
+                fi
+                
+                if [[ "$INSTALL_IBTOP" =~ ^[Yy]$ ]]; then
+                    print_info "Installing ibtop network monitoring tool..."
+                    if curl -fsSL https://raw.githubusercontent.com/JannikSt/ibtop/main/install.sh | bash; then
+                        print_info "✓ ibtop installed successfully"
+                    else
+                        print_warning "Failed to install ibtop"
+                    fi
+                else
+                    print_info "Skipped ibtop installation"
+                fi
+            else
+                print_info "✓ ibtop already installed"
             fi
         fi
         
@@ -249,27 +335,32 @@ else
                     
                     if [[ "$INSTALL_GPP" =~ ^[Yy]$ ]]; then
                         print_info "Installing g++-$GCC_VERSION to match gcc-$GCC_VERSION..."
-                        if sudo NEEDRESTART_MODE=l apt install -y g++-$GCC_VERSION; then
-                            print_info "✓ g++-$GCC_VERSION installed"
-                            
-                            # Ask about setting as default
-                            if [ "$AUTO_YES" = true ]; then
-                                SET_DEFAULT="y"
-                            else
-                                read -p "Set g++-$GCC_VERSION as default g++ compiler? (y/n): " SET_DEFAULT
-                            fi
-                            
-                            if [[ "$SET_DEFAULT" =~ ^[Yy]$ ]]; then
-                                if sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-$GCC_VERSION 100; then
-                                    print_info "✓ Set g++-$GCC_VERSION as default g++ compiler"
+                        if [ "$OS_TYPE" = "ubuntu" ]; then
+                            if sudo NEEDRESTART_MODE=l apt install -y g++-$GCC_VERSION; then
+                                print_info "✓ g++-$GCC_VERSION installed"
+                                
+                                # Ask about setting as default
+                                if [ "$AUTO_YES" = true ]; then
+                                    SET_DEFAULT="y"
                                 else
-                                    print_warning "Could not set g++-$GCC_VERSION as default"
+                                    read -p "Set g++-$GCC_VERSION as default g++ compiler? (y/n): " SET_DEFAULT
+                                fi
+                                
+                                if [[ "$SET_DEFAULT" =~ ^[Yy]$ ]]; then
+                                    if sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-$GCC_VERSION 100; then
+                                        print_info "✓ Set g++-$GCC_VERSION as default g++ compiler"
+                                    else
+                                        print_warning "Could not set g++-$GCC_VERSION as default"
+                                    fi
+                                else
+                                    print_info "Skipped setting g++-$GCC_VERSION as default"
                                 fi
                             else
-                                print_info "Skipped setting g++-$GCC_VERSION as default"
+                                print_warning "Could not install g++-$GCC_VERSION - CUDA compilation may fail"
                             fi
-                        else
-                            print_warning "Could not install g++-$GCC_VERSION - CUDA compilation may fail"
+                        elif [ "$OS_TYPE" = "rhel" ]; then
+                            # RHEL variants typically have matching gcc/g++ versions in the gcc-c++ package
+                            print_info "✓ gcc-c++ package provides matching g++ version"
                         fi
                     else
                         print_warning "Skipped g++-$GCC_VERSION installation - CUDA compilation may fail"
@@ -316,39 +407,48 @@ else
             
             if [[ "$INSTALL_CUDA" =~ ^[Yy]$ ]]; then
                 print_info "Installing CUDA toolkit $TARGET_CUDA_VERSION..."
-                print_info "Detecting appropriate CUDA repository for Ubuntu $VERSION_ID..."
                 
-                # Generate potential repo versions to try
-                # Format: ubuntu<YY><MM> where YY is year (last 2 digits) and MM is month
-                VERSION_YEAR=$(echo $VERSION_ID | cut -d. -f1)
-                VERSION_MONTH=$(echo $VERSION_ID | cut -d. -f2)
-                
-                # Build list of versions to try
-                CUDA_REPO_VERSIONS=()
-                
-                # First, try exact version match
-                CUDA_REPO_VERSIONS+=("ubuntu${VERSION_YEAR}${VERSION_MONTH}")
-                
-                # For future-proofing, try previous LTS versions in descending order
-                # Start from current version and go back to 22.04
-                for year in $(seq $VERSION_YEAR -2 22); do
-                    if [ $year -eq $VERSION_YEAR ]; then
-                        # For current year, try months from current back to 04
-                        for month in $(seq $VERSION_MONTH -2 4); do
-                            [ $month -lt 10 ] && month="0$month"
-                            CUDA_REPO_VERSIONS+=("ubuntu${year}${month}")
-                        done
-                    else
-                        # For previous years, only try LTS versions (04 and 10)
-                        CUDA_REPO_VERSIONS+=("ubuntu${year}10")
-                        CUDA_REPO_VERSIONS+=("ubuntu${year}04")
-                    fi
-                done
-                
-                # Remove duplicates while preserving order
-                CUDA_REPO_VERSIONS=($(echo "${CUDA_REPO_VERSIONS[@]}" | tr ' ' '\n' | awk '!seen[$0]++' | tr '\n' ' '))
-                
-                print_info "Will try CUDA repositories in order: ${CUDA_REPO_VERSIONS[*]}"
+                if [ "$OS_TYPE" = "ubuntu" ]; then
+                        
+                    # Generate potential repo versions to try
+                    # Format: ubuntu<YY><MM> where YY is year (last 2 digits) and MM is month
+                    VERSION_YEAR=$(echo $VERSION_ID | cut -d. -f1)
+                    VERSION_MONTH=$(echo $VERSION_ID | cut -d. -f2)
+                    
+                    # Build list of versions to try
+                    CUDA_REPO_VERSIONS=()
+                    
+                    # First, try exact version match
+                    CUDA_REPO_VERSIONS+=("ubuntu${VERSION_YEAR}${VERSION_MONTH}")
+                    
+                    # For future-proofing, try previous LTS versions in descending order
+                    # Start from current version and go back to 22.04
+                    for year in $(seq $VERSION_YEAR -2 22); do
+                        if [ $year -eq $VERSION_YEAR ]; then
+                            # For current year, try months from current back to 04
+                            for month in $(seq $VERSION_MONTH -2 4); do
+                                [ $month -lt 10 ] && month="0$month"
+                                CUDA_REPO_VERSIONS+=("ubuntu${year}${month}")
+                            done
+                        else
+                            # For previous years, only try LTS versions (04 and 10)
+                            CUDA_REPO_VERSIONS+=("ubuntu${year}10")
+                            CUDA_REPO_VERSIONS+=("ubuntu${year}04")
+                        fi
+                    done
+                    
+                    # Remove duplicates while preserving order
+                    CUDA_REPO_VERSIONS=($(echo "${CUDA_REPO_VERSIONS[@]}" | tr ' ' '\n' | awk '!seen[$0]++' | tr '\n' ' '))
+                    
+                    print_info "Will try CUDA repositories in order: ${CUDA_REPO_VERSIONS[*]}"
+                    
+                elif [ "$OS_TYPE" = "rhel" ]; then
+                    print_info "Detecting appropriate CUDA repository for $NAME $VERSION_ID..."
+                    
+                    # For RHEL variants, use rhel9 repository
+                    CUDA_REPO_VERSIONS=("rhel9" "rhel8")
+                    print_info "Will try CUDA repositories in order: ${CUDA_REPO_VERSIONS[*]}"
+                fi
                 
                 # Use temp directory for downloads
                 TEMP_DEB="/tmp/cuda-keyring_$$.deb"
@@ -356,139 +456,187 @@ else
                 
                 # Try each repo version until one works
                 CUDA_INSTALLED=false
-                for UBUNTU_VERSION in "${CUDA_REPO_VERSIONS[@]}"; do
-                    CUDA_KEYRING_URL="https://developer.download.nvidia.com/compute/cuda/repos/${UBUNTU_VERSION}/x86_64/cuda-keyring_1.0-1_all.deb"
-                    print_info "Trying CUDA repository: $UBUNTU_VERSION"
+                for REPO_VERSION in "${CUDA_REPO_VERSIONS[@]}"; do
+                    if [ "$OS_TYPE" = "ubuntu" ]; then
+                        CUDA_KEYRING_URL="https://developer.download.nvidia.com/compute/cuda/repos/${REPO_VERSION}/x86_64/cuda-keyring_1.0-1_all.deb"
+                    elif [ "$OS_TYPE" = "rhel" ]; then
+                        CUDA_REPO_URL="https://developer.download.nvidia.com/compute/cuda/repos/${REPO_VERSION}/x86_64/cuda-${REPO_VERSION}.repo"
+                    fi
+                    print_info "Trying CUDA repository: $REPO_VERSION"
                     
                     # Clean up any previous attempts
                     rm -f "$TEMP_DEB"
                     
-                    # Download with better error checking
-                    if wget --timeout=30 --tries=2 -O "$TEMP_DEB" "$CUDA_KEYRING_URL" 2>/dev/null; then
-                        # Verify it's actually a .deb file
-                        if file "$TEMP_DEB" | grep -q "Debian binary package"; then
-                            print_info "Valid CUDA keyring downloaded from $UBUNTU_VERSION repository"
-                            
-                            sudo dpkg -i "$TEMP_DEB"
-                            if [ $? -eq 0 ]; then
-                                rm -f "$TEMP_DEB"
+                    # Download and install based on OS type
+                    if [ "$OS_TYPE" = "ubuntu" ]; then
+                        if wget --timeout=30 --tries=2 -O "$TEMP_DEB" "$CUDA_KEYRING_URL" 2>/dev/null; then
+                            # Verify it's actually a .deb file
+                            if file "$TEMP_DEB" | grep -q "Debian binary package"; then
+                                print_info "Valid CUDA keyring downloaded from $REPO_VERSION repository"
                                 
-                                # Update package lists
-                                print_info "Updating package lists..."
-                                sudo apt update
+                                sudo dpkg -i "$TEMP_DEB"
                                 if [ $? -eq 0 ]; then
-                                    # Try to install CUDA toolkit
-                                    print_info "Installing CUDA toolkit (this may take a while)..."
-                                    
-                                    # First check what CUDA packages are available
-                                    print_info "Checking available CUDA versions..."
-                                    AVAILABLE_CUDA=$(apt-cache search cuda-toolkit | grep -E "^cuda-toolkit" | head -5)
-                                    if [ -n "$AVAILABLE_CUDA" ]; then
-                                        print_info "Available CUDA packages:"
-                                        echo "$AVAILABLE_CUDA"
-                                    fi
-                                    
-                                    # Try to install the target CUDA version
-                                    # Convert TARGET_CUDA_VERSION (e.g., "12.3") to package format (e.g., "12-3")
-                                    CUDA_PKG_VERSION=$(echo $TARGET_CUDA_VERSION | sed 's/\./-/')
-                                    
-                                    print_info "Attempting to install cuda-toolkit-$CUDA_PKG_VERSION..."
-                                    
-                                    # First try the specific version we want
-                                    if sudo NEEDRESTART_MODE=l apt install -y cuda-toolkit-$CUDA_PKG_VERSION 2>/dev/null; then
-                                        print_info "✓ CUDA toolkit $TARGET_CUDA_VERSION installed successfully"
-                                        CUDA_INSTALLED=true
-                                    else
-                                        print_warning "cuda-toolkit-$CUDA_PKG_VERSION not available, trying fallback versions..."
-                                        
-                                        # Fallback strategy based on target version
-                                        # Try versions close to target, working backwards
-                                        if [ "$TARGET_CUDA_VERSION" = "12.9" ]; then
-                                            # Try 12.6, 12.3, 12.2 as fallbacks
-                                            for fallback in "12-6" "12-3" "12-2"; do
-                                                if sudo NEEDRESTART_MODE=l apt install -y cuda-toolkit-$fallback 2>/dev/null; then
-                                                    print_info "✓ CUDA toolkit $(echo $fallback | sed 's/-/./') installed successfully (fallback)"
-                                                    CUDA_INSTALLED=true
-                                                    break
-                                                fi
-                                            done
-                                        elif [ "$TARGET_CUDA_VERSION" = "12.6" ]; then
-                                            # Try 12.3, 12.2 as fallbacks
-                                            for fallback in "12-3" "12-2"; do
-                                                if sudo NEEDRESTART_MODE=l apt install -y cuda-toolkit-$fallback 2>/dev/null; then
-                                                    print_info "✓ CUDA toolkit $(echo $fallback | sed 's/-/./') installed successfully (fallback)"
-                                                    CUDA_INSTALLED=true
-                                                    break
-                                                fi
-                                            done
-                                        elif [ "$TARGET_CUDA_VERSION" = "12.3" ]; then
-                                            # Try 12.2, 12.1 as fallbacks
-                                            for fallback in "12-2" "12-1"; do
-                                                if sudo NEEDRESTART_MODE=l apt install -y cuda-toolkit-$fallback 2>/dev/null; then
-                                                    print_info "✓ CUDA toolkit $(echo $fallback | sed 's/-/./') installed successfully (fallback)"
-                                                    CUDA_INSTALLED=true
-                                                    break
-                                                fi
-                                            done
-                                        elif [ "$TARGET_CUDA_VERSION" = "12.2" ]; then
-                                            # Try 12.1 as fallback
-                                            if sudo NEEDRESTART_MODE=l apt install -y cuda-toolkit-12-1 2>/dev/null; then
-                                                print_info "✓ CUDA toolkit 12.1 installed successfully (fallback)"
-                                                CUDA_INSTALLED=true
-                                            fi
-                                        elif [ "$TARGET_CUDA_VERSION" = "11.8" ]; then
-                                            # No fallback for 11.8, it's already our minimum
-                                            print_warning "Could not install CUDA toolkit 11.8"
-                                        fi
-                                        
-                                        # Last resort: try generic cuda-toolkit if nothing else worked
-                                        if [ "$CUDA_INSTALLED" = false ]; then
-                                            print_info "Trying generic cuda-toolkit package as last resort..."
-                                            if sudo NEEDRESTART_MODE=l apt install -y cuda-toolkit 2>/dev/null; then
-                                                print_info "✓ CUDA toolkit installed successfully (generic version)"
-                                                CUDA_INSTALLED=true
-                                            fi
-                                        fi
-                                    fi
-                                    
-                                    if [ "$CUDA_INSTALLED" = false ]; then
-                                        print_warning "Could not install CUDA toolkit from $UBUNTU_VERSION repository"
-                                    fi
-                                    
-                                    if [ "$CUDA_INSTALLED" = true ]; then
-                                        # Add CUDA to PATH if not already there
-                                        if ! grep -q "/usr/local/cuda/bin" ~/.bashrc; then
-                                            if [ "$AUTO_YES" = true ]; then
-                                                ADD_CUDA_PATH="y"
-                                            else
-                                                read -p "Add CUDA to PATH in ~/.bashrc? (y/n): " ADD_CUDA_PATH
-                                            fi
-                                            
-                                            if [[ "$ADD_CUDA_PATH" =~ ^[Yy]$ ]]; then
-                                                echo '' >> ~/.bashrc
-                                                echo '# CUDA toolkit' >> ~/.bashrc
-                                                echo 'export PATH="/usr/local/cuda/bin:$PATH"' >> ~/.bashrc
-                                                echo 'export LD_LIBRARY_PATH="/usr/local/cuda/lib64:$LD_LIBRARY_PATH"' >> ~/.bashrc
-                                                print_info "Added CUDA to PATH in ~/.bashrc"
-                                                print_info "Run 'source ~/.bashrc' or start a new terminal to use nvcc"
-                                            else
-                                                print_info "Skipped adding CUDA to PATH"
-                                                print_info "You can manually add /usr/local/cuda/bin to your PATH later"
-                                            fi
-                                        fi
-                                        break
-                                    fi
+                                    rm -f "$TEMP_DEB"
+                                    REPO_CONFIGURED=true
                                 else
-                                    print_warning "Failed to update apt after adding CUDA repo"
+                                    print_warning "Failed to install CUDA keyring"
+                                    REPO_CONFIGURED=false
                                 fi
                             else
-                                print_warning "Failed to install CUDA keyring"
+                                print_info "Downloaded file is not a valid .deb package"
+                                REPO_CONFIGURED=false
                             fi
                         else
-                            print_info "Downloaded file is not a valid .deb package"
+                            print_info "Repository $REPO_VERSION not available"
+                            REPO_CONFIGURED=false
                         fi
-                    else
-                        print_info "Repository $UBUNTU_VERSION not available"
+                    elif [ "$OS_TYPE" = "rhel" ]; then
+                        # For RHEL variants, download and install the repo file
+                        if wget --timeout=30 --tries=2 -O /tmp/cuda.repo "$CUDA_REPO_URL" 2>/dev/null; then
+                            # Install the repo file
+                            sudo cp /tmp/cuda.repo /etc/yum.repos.d/cuda.repo
+                            rm -f /tmp/cuda.repo
+                            REPO_CONFIGURED=true
+                        else
+                            print_info "Repository $REPO_VERSION not available"
+                            REPO_CONFIGURED=false
+                        fi
+                    fi
+                    
+                    if [ "$REPO_CONFIGURED" = true ]; then
+                                
+                        # Update package lists
+                        print_info "Updating package lists..."
+                        if [ "$OS_TYPE" = "ubuntu" ]; then
+                            sudo apt update
+                        elif [ "$OS_TYPE" = "rhel" ]; then
+                            sudo dnf makecache
+                        fi
+                        
+                        if [ $? -eq 0 ]; then
+                            # Try to install CUDA toolkit
+                            print_info "Installing CUDA toolkit (this may take a while)..."
+                            
+                            # First check what CUDA packages are available
+                            print_info "Checking available CUDA versions..."
+                            if [ "$OS_TYPE" = "ubuntu" ]; then
+                                AVAILABLE_CUDA=$(apt-cache search cuda-toolkit | grep -E "^cuda-toolkit" | head -5)
+                            elif [ "$OS_TYPE" = "rhel" ]; then
+                                AVAILABLE_CUDA=$(dnf search cuda-toolkit 2>/dev/null | grep -E "^cuda-toolkit" | head -5)
+                            fi
+                            if [ -n "$AVAILABLE_CUDA" ]; then
+                                print_info "Available CUDA packages:"
+                                echo "$AVAILABLE_CUDA"
+                            fi
+                                    
+                            # Try to install the target CUDA version
+                            # Convert TARGET_CUDA_VERSION (e.g., "12.3") to package format (e.g., "12-3")
+                            CUDA_PKG_VERSION=$(echo $TARGET_CUDA_VERSION | sed 's/\./-/')
+                            
+                            print_info "Attempting to install cuda-toolkit-$CUDA_PKG_VERSION..."
+                            
+                            # First try the specific version we want
+                            if [ "$OS_TYPE" = "ubuntu" ]; then
+                                if sudo NEEDRESTART_MODE=l apt install -y cuda-toolkit-$CUDA_PKG_VERSION 2>/dev/null; then
+                                    print_info "✓ CUDA toolkit $TARGET_CUDA_VERSION installed successfully"
+                                    CUDA_INSTALLED=true
+                                else
+                                    INSTALL_CMD="sudo NEEDRESTART_MODE=l apt install -y"
+                                    CUDA_INSTALLED=false
+                                fi
+                            elif [ "$OS_TYPE" = "rhel" ]; then
+                                if sudo dnf install -y cuda-toolkit-$CUDA_PKG_VERSION 2>/dev/null; then
+                                    print_info "✓ CUDA toolkit $TARGET_CUDA_VERSION installed successfully"
+                                    CUDA_INSTALLED=true
+                                else
+                                    INSTALL_CMD="sudo dnf install -y"
+                                    CUDA_INSTALLED=false
+                                fi
+                            fi
+                            
+                            if [ "$CUDA_INSTALLED" = false ]; then
+                                print_warning "cuda-toolkit-$CUDA_PKG_VERSION not available, trying fallback versions..."
+                                
+                                # Fallback strategy based on target version
+                                # Try versions close to target, working backwards
+                                if [ "$TARGET_CUDA_VERSION" = "12.9" ]; then
+                                    # Try 12.6, 12.3, 12.2 as fallbacks
+                                    for fallback in "12-6" "12-3" "12-2"; do
+                                        if $INSTALL_CMD cuda-toolkit-$fallback 2>/dev/null; then
+                                            print_info "✓ CUDA toolkit $(echo $fallback | sed 's/-/./') installed successfully (fallback)"
+                                            CUDA_INSTALLED=true
+                                            break
+                                        fi
+                                    done
+                                elif [ "$TARGET_CUDA_VERSION" = "12.6" ]; then
+                                    # Try 12.3, 12.2 as fallbacks
+                                    for fallback in "12-3" "12-2"; do
+                                        if $INSTALL_CMD cuda-toolkit-$fallback 2>/dev/null; then
+                                            print_info "✓ CUDA toolkit $(echo $fallback | sed 's/-/./') installed successfully (fallback)"
+                                            CUDA_INSTALLED=true
+                                            break
+                                        fi
+                                    done
+                                elif [ "$TARGET_CUDA_VERSION" = "12.3" ]; then
+                                    # Try 12.2, 12.1 as fallbacks
+                                    for fallback in "12-2" "12-1"; do
+                                        if $INSTALL_CMD cuda-toolkit-$fallback 2>/dev/null; then
+                                            print_info "✓ CUDA toolkit $(echo $fallback | sed 's/-/./') installed successfully (fallback)"
+                                            CUDA_INSTALLED=true
+                                            break
+                                        fi
+                                    done
+                                elif [ "$TARGET_CUDA_VERSION" = "12.2" ]; then
+                                    # Try 12.1 as fallback
+                                    if $INSTALL_CMD cuda-toolkit-12-1 2>/dev/null; then
+                                        print_info "✓ CUDA toolkit 12.1 installed successfully (fallback)"
+                                        CUDA_INSTALLED=true
+                                    fi
+                                elif [ "$TARGET_CUDA_VERSION" = "11.8" ]; then
+                                    # No fallback for 11.8, it's already our minimum
+                                    print_warning "Could not install CUDA toolkit 11.8"
+                                fi
+                                
+                                # Last resort: try generic cuda-toolkit if nothing else worked
+                                if [ "$CUDA_INSTALLED" = false ]; then
+                                    print_info "Trying generic cuda-toolkit package as last resort..."
+                                    if $INSTALL_CMD cuda-toolkit 2>/dev/null; then
+                                        print_info "✓ CUDA toolkit installed successfully (generic version)"
+                                        CUDA_INSTALLED=true
+                                    fi
+                                fi
+                            fi
+                                    
+                            if [ "$CUDA_INSTALLED" = false ]; then
+                                print_warning "Could not install CUDA toolkit from $REPO_VERSION repository"
+                            fi
+                            
+                            if [ "$CUDA_INSTALLED" = true ]; then
+                                # Add CUDA to PATH if not already there
+                                if ! grep -q "/usr/local/cuda/bin" ~/.bashrc; then
+                                    if [ "$AUTO_YES" = true ]; then
+                                        ADD_CUDA_PATH="y"
+                                    else
+                                        read -p "Add CUDA to PATH in ~/.bashrc? (y/n): " ADD_CUDA_PATH
+                                    fi
+                                    
+                                    if [[ "$ADD_CUDA_PATH" =~ ^[Yy]$ ]]; then
+                                        echo '' >> ~/.bashrc
+                                        echo '# CUDA toolkit' >> ~/.bashrc
+                                        echo 'export PATH="/usr/local/cuda/bin:$PATH"' >> ~/.bashrc
+                                        echo 'export LD_LIBRARY_PATH="/usr/local/cuda/lib64:$LD_LIBRARY_PATH"' >> ~/.bashrc
+                                        print_info "Added CUDA to PATH in ~/.bashrc"
+                                        print_info "Run 'source ~/.bashrc' or start a new terminal to use nvcc"
+                                    else
+                                        print_info "Skipped adding CUDA to PATH"
+                                        print_info "You can manually add /usr/local/cuda/bin to your PATH later"
+                                    fi
+                                fi
+                                break
+                            fi
+                        else
+                            print_warning "Failed to update package lists after adding CUDA repo"
+                        fi
                     fi
                 done
                 
@@ -500,7 +648,11 @@ else
                     print_info "You may need to install it manually from:"
                     print_info "https://developer.nvidia.com/cuda-downloads"
                     print_info ""
-                    print_info "Select: Linux > x86_64 > Ubuntu > $VERSION_MAJOR > deb (network)"
+                    if [ "$OS_TYPE" = "ubuntu" ]; then
+                        print_info "Select: Linux > x86_64 > Ubuntu > $VERSION_MAJOR > deb (network)"
+                    elif [ "$OS_TYPE" = "rhel" ]; then
+                        print_info "Select: Linux > x86_64 > RHEL > $VERSION_MAJOR > rpm (network)"
+                    fi
                     INSTALL_SUCCESS=false
                 fi
             fi
