@@ -8,7 +8,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Default values
-DEFAULT_MODEL_PATH="/data/ml/models"
+DEFAULT_HF_PATH="/data/ml/models/huggingface"
 DEFAULT_MODEL="PrimeIntellect/INTELLECT-2"
 
 # Function to print colored output
@@ -41,8 +41,9 @@ setup_directory() {
 
 # Parse command line arguments
 MODEL_NAME=""
-MODEL_PATH="$DEFAULT_MODEL_PATH"
+HF_PATH=""
 QUANTIZATION=""
+AUTO_MODE=false
 while [[ $# -gt 0 ]]; do
     case $1 in
         -m|--model)
@@ -50,19 +51,24 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         -p|--path)
-            MODEL_PATH="$2"
+            HF_PATH="$2"
             shift 2
             ;;
         -q|--quantization)
             QUANTIZATION="$2"
             shift 2
             ;;
+        --auto)
+            AUTO_MODE=true
+            shift
+            ;;
         -h|--help)
             echo "Usage: $0 [OPTIONS]"
             echo "Options:"
             echo "  -m, --model MODEL_NAME     Model to download (e.g., 'openai/gpt-oss-120b')"
-            echo "  -p, --path PATH           Custom path for models (default: $DEFAULT_MODEL_PATH)"
+            echo "  -p, --path PATH           Custom path for models (default: $DEFAULT_HF_PATH or \$HF_HOME)"
             echo "  -q, --quantization TYPE   Download quantized version (e.g., 'GGUF', 'GPTQ')"
+            echo "  --auto                    Use default settings without prompting"
             echo "  -h, --help               Show this help message"
             echo ""
             echo "Examples:"
@@ -79,6 +85,41 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Determine HuggingFace path
+# Priority: 1) Command line arg, 2) HF_HOME env var, 3) HUGGINGFACE_HUB_CACHE env var, 4) Interactive prompt/default
+if [ -n "$HF_PATH" ]; then
+    # Use command line argument
+    print_info "Using HuggingFace path from command line: $HF_PATH"
+elif [ -n "$HF_HOME" ]; then
+    # Use existing HF_HOME environment variable
+    HF_PATH="$HF_HOME"
+    print_info "Using existing HF_HOME environment variable: $HF_PATH"
+elif [ -n "$HUGGINGFACE_HUB_CACHE" ]; then
+    # Use existing HUGGINGFACE_HUB_CACHE environment variable
+    HF_PATH="$HUGGINGFACE_HUB_CACHE"
+    print_info "Using existing HUGGINGFACE_HUB_CACHE environment variable: $HF_PATH"
+else
+    # No environment variable set, ask user (same logic as 03_setup_env.sh)
+    if [ "$AUTO_MODE" = false ]; then
+        echo ""
+        print_info "Where would you like to store HuggingFace models?"
+        print_info "Default: $DEFAULT_HF_PATH"
+        read -p "Enter path (press Enter for default): " HF_PATH_INPUT
+        
+        if [ -z "$HF_PATH_INPUT" ]; then
+            HF_PATH="$DEFAULT_HF_PATH"
+            print_info "Using default path: $HF_PATH"
+        else
+            # Expand tilde if present
+            HF_PATH="${HF_PATH_INPUT/#\~/$HOME}"
+            print_info "Using custom path: $HF_PATH"
+        fi
+    else
+        HF_PATH="$DEFAULT_HF_PATH"
+        print_info "Using default HuggingFace path: $HF_PATH"
+    fi
+fi
 
 # Check if required tools are installed
 print_info "Checking required tools..."
@@ -233,13 +274,12 @@ fi
 
 # Setup directories
 print_info "Setting up model directory..."
-setup_directory "$MODEL_PATH"
-setup_directory "$MODEL_PATH/huggingface"
-setup_directory "$MODEL_PATH/huggingface/hub"
+setup_directory "$HF_PATH"
+setup_directory "$HF_PATH/hub"
 
 # Export environment variables (use only HF_HOME to avoid deprecation warning)
-export HF_HOME="$MODEL_PATH/huggingface"
-export HUGGINGFACE_HUB_CACHE="$MODEL_PATH/huggingface"
+export HF_HOME="$HF_PATH"
+export HUGGINGFACE_HUB_CACHE="$HF_PATH"
 
 print_info "Environment variables set:"
 print_info "  HF_HOME=$HF_HOME"
@@ -256,7 +296,7 @@ from pathlib import Path
 from datetime import datetime
 
 # Set environment variables before imports
-os.environ['HF_HOME'] = '$MODEL_PATH/huggingface'
+os.environ['HF_HOME'] = '$HF_PATH'
 
 try:
     from huggingface_hub import snapshot_download, HfApi, scan_cache_dir
@@ -395,7 +435,7 @@ if len(result) == 4 and result[0]:  # Model is complete
     print("\\nNo download needed - model is ready to use!")
     
     # Save to downloaded_models.json
-    info_file = Path("$MODEL_PATH") / "downloaded_models.json"
+    info_file = Path("$HF_PATH").parent / "downloaded_models.json"
     model_info_data = {
         "model_name": model_name,
         "local_path": local_path if local_path else "cached",
@@ -434,7 +474,7 @@ print("STARTING DOWNLOAD")
 print("="*60)
 
 # Create a progress file to track download
-progress_file = Path("$MODEL_PATH") / f".download_progress_{model_name.replace('/', '_')}.json"
+progress_file = Path("$HF_PATH").parent / f".download_progress_{model_name.replace('/', '_')}.json"
 
 try:
     # Save download start info
@@ -475,7 +515,7 @@ try:
             json.dump(progress_data, f, indent=2)
         
         # Save model info
-        info_file = Path("$MODEL_PATH") / "downloaded_models.json"
+        info_file = Path("$HF_PATH").parent / "downloaded_models.json"
         model_info_data = {
             "model_name": model_name,
             "local_path": local_path,
@@ -555,12 +595,13 @@ if [ $RESULT -eq 0 ]; then
     
     # Create a reference script for this model
     MODEL_SAFE_NAME=$(echo "$MODEL_NAME" | sed 's/[^a-zA-Z0-9-]/_/g')
-    LOAD_SCRIPT="$MODEL_PATH/load_${MODEL_SAFE_NAME}.sh"
+    # Store the load script in the parent directory of HF_PATH
+    LOAD_SCRIPT="$(dirname "$HF_PATH")/load_${MODEL_SAFE_NAME}.sh"
     
     cat > "$LOAD_SCRIPT" << EOF
 #!/bin/bash
 # Auto-generated script to load $MODEL_NAME
-export HF_HOME="$MODEL_PATH/huggingface"
+export HF_HOME="$HF_PATH"
 echo "Environment set for $MODEL_NAME"
 echo "Model location: \$HF_HOME"
 echo ""
@@ -584,11 +625,11 @@ EOF
     echo "✅ Setup Complete!"
     echo "=========================================="
     echo "Model: $MODEL_NAME"
-    echo "Location: $MODEL_PATH/huggingface"
+    echo "Location: $HF_PATH"
     echo ""
     echo "To use this model in the future:"
     echo "1. Set environment variable:"
-    echo "   export HF_HOME='$MODEL_PATH/huggingface'"
+    echo "   export HF_HOME='$HF_PATH'"
     echo ""
     echo "2. Or source the load script:"
     echo "   source $LOAD_SCRIPT"

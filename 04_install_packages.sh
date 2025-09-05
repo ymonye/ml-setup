@@ -127,8 +127,9 @@ def install_glm_4_5_packages(auto_yes=False):
     ]
     
     if ask_install("Install GLM 4.5 environment packages?", auto_yes):
-        # Properly quote requirements for shell
-        cmd = f"uv pip install {' '.join(requirements)}"
+        # Properly quote requirements for shell - each requirement must be quoted
+        quoted_reqs = ' '.join(f"'{req}'" for req in requirements)
+        cmd = f"uv pip install {quoted_reqs}"
         if not run_command(cmd, "Installing GLM 4.5 requirements"):
             return False
     
