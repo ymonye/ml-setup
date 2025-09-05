@@ -102,6 +102,7 @@ if [ "$OS_TYPE" = "ubuntu" ]; then
         "wget"
         "git"
         "htop"
+	"nvtop"
         "tmux"
         "pkg-config"
     )
@@ -132,6 +133,7 @@ elif [ "$OS_TYPE" = "rhel" ]; then
         "wget"
         "git"
         "htop"
+	"nvtop"
         "tmux"
         "pkgconf-pkg-config"
     )
