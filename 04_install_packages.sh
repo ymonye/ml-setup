@@ -123,7 +123,11 @@ def install_glm_4_5_packages(auto_yes=False):
         "pre-commit>=4.2.0",
         "accelerate>=1.10.0",
         "sglang>=0.5.1",
-        "vllm>=0.10.1.1"
+        "vllm>=0.10.1.1",
+	"orjson",
+	"sgl_kernel",
+	"nvidia-ml-py",
+	"torchao"
     ]
     
     if ask_install("Install GLM 4.5 environment packages?", auto_yes):
