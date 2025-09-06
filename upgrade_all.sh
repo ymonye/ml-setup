@@ -4,6 +4,7 @@ set -euo pipefail
 # Run upgrade scripts found in the current working directory
 scripts=(
   "upgrade_claude.sh"
+  "upgrade_ccr.sh"
   "upgrade_codex.sh"
   "upgrade_crush.sh"
   "upgrade_cursor.sh"

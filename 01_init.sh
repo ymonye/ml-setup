@@ -135,12 +135,13 @@ echo ""
 if command -v npm &> /dev/null; then
     print_info "Available coding CLIs to install:"
     print_info "  1. Claude Code (@anthropic-ai/claude-code)"
-    print_info "  2. Crush (@charmland/crush)"
-    print_info "  3. Gemini CLI (@google/gemini-cli)"
-    print_info "  4. OpenAI Codex (@openai/codex)"
-    print_info "  5. Qwen Code (@qwen-code/qwen-code)"
-    print_info "  6. OpenCode AI (opencode-ai)"
-    print_info "  7. Cursor CLI"
+    print_info "  2. Claude Code Router (@musistudio/claude-code-router)"
+    print_info "  3. Crush (@charmland/crush)"
+    print_info "  4. Gemini CLI (@google/gemini-cli)"
+    print_info "  5. OpenAI Codex (@openai/codex)"
+    print_info "  6. Qwen Code (@qwen-code/qwen-code)"
+    print_info "  7. OpenCode AI (opencode-ai)"
+    print_info "  8. Cursor CLI"
     echo ""
     
     if [ "$AUTO_YES" = true ]; then
@@ -161,8 +162,46 @@ if command -v npm &> /dev/null; then
             npm install -g @anthropic-ai/claude-code
             [ $? -eq 0 ] && print_info "✓ Claude Code installed" || print_warning "Failed to install Claude Code"
         fi
+
+	#Claude Code Router
+        if [ "$AUTO_YES" = true ]; then
+            INSTALL_CCR="y"
+        else
+            read -p "  Install Claude Code Router? (y/n): " INSTALL_CCR
+        fi
+        if [[ "$INSTALL_CCR" =~ ^[Yy]$ ]]; then
+            print_info "Installing Claude Code Router..."
+            npm install -g @musistudio/claude-code-router
+            if [ $? -eq 0 ]; then
+                print_info "✓ Claude Code Router installed"
+                
+                # Copy config file to ~/.claude-code-router/
+                CONFIG_SOURCE="$(dirname "$0")/configs/.claude-code-router/config.json"
+                CONFIG_DIR="$HOME/.claude-code-router"
+                CONFIG_TARGET="$CONFIG_DIR/config.json"
+                
+                if [ -f "$CONFIG_SOURCE" ]; then
+                    print_info "Setting up Claude Code Router config..."
+                    
+                    # Create directory if it doesn't exist
+                    mkdir -p "$CONFIG_DIR"
+                    
+                    # Copy config file
+                    cp "$CONFIG_SOURCE" "$CONFIG_TARGET"
+                    if [ $? -eq 0 ]; then
+                        print_info "✓ Config file copied to $CONFIG_TARGET"
+                    else
+                        print_warning "Failed to copy config file"
+                    fi
+                else
+                    print_warning "Config file not found at $CONFIG_SOURCE"
+                fi
+            else
+                print_warning "Failed to install Claude Code Router"
+            fi
+        fi
         
-        # Crush
+# Crush
         if [ "$AUTO_YES" = true ]; then
             INSTALL_CRUSH="y"
         else
