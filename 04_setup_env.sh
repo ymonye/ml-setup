@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Script: 03_setup_env.sh
+# Script: 04_setup_env.sh
 # Purpose: Create ML virtual environment and set up environment variables
-# Usage: source 03_setup_env.sh [--auto] [env_name]
+# Usage: source 04_setup_env.sh [--auto] [env_name]
 
 # Source bashrc to ensure environment is properly loaded
 if [ -f ~/.bashrc ]; then

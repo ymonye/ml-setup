@@ -1,5 +1,5 @@
 #!/bin/bash
-# Script: 01_install_dependencies.sh
+# Script: 02_install_dependencies.sh
 # Purpose: Check and install system dependencies for ML environment
 # Colors
 RED='\033[0;31m'

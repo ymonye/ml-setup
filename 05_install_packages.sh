@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Script: 04_install_packages.py
+Script: 05_install_packages.py
 Purpose: Install ML packages based on detected Python environment
-Usage: python 04_install_packages.py [-y]
+Usage: python 05_install_packages.py [-y]
 """
 
 import os
