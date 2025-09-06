@@ -141,7 +141,6 @@ if command -v npm &> /dev/null; then
     print_info "  5. Qwen Code (@qwen-code/qwen-code)"
     print_info "  6. OpenCode AI (opencode-ai)"
     print_info "  7. Cursor CLI"
-    print_info "  8. TunaCode"
     echo ""
     
     if [ "$AUTO_YES" = true ]; then
@@ -233,18 +232,6 @@ if command -v npm &> /dev/null; then
             print_info "Installing Cursor CLI..."
             curl https://cursor.com/install -fsS | bash
             [ $? -eq 0 ] && print_info "✓ Cursor CLI installed" || print_warning "Failed to install Cursor CLI"
-        fi
-
-	# TunaCode
-        if [ "$AUTO_YES" = true ]; then
-            INSTALL_TUNACODE="y"
-        else
-            read -p "  Install TunaCode? (y/n): " INSTALL_TUNACODE
-        fi
-        if [[ "$INSTALL_TUNACODE" =~ ^[Yy]$ ]]; then
-            print_info "Installing TunaCode..."
-            wget -qO- https://raw.githubusercontent.com/alchemiststudiosDOTai/tunacode/master/scripts/install_linux.sh | bash
-            [ $? -eq 0 ] && print_info "✓ TunaCode installed" || print_warning "Failed to install TunaCode"
         fi
     else
         print_info "Skipped CLI installations"
