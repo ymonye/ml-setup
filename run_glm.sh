@@ -175,27 +175,52 @@ run_sglang_server() {
     echo "Served as: $MODEL_NAME"
     echo "Tensor parallel size: $TENSOR_PARALLEL_SIZE"
     echo ""
-    echo "Command: python3 -m sglang.launch_server --model-path $MODEL_REPO --tp-size $TENSOR_PARALLEL_SIZE --tool-call-parser glm45 --reasoning-parser glm45 --speculative-algorithm EAGLE --speculative-num-steps 3 --speculative-eagle-topk 1 --speculative-num-draft-tokens 4 --mem-fraction-static 0.7 --disable-shared-experts-fusion --served-model-name $MODEL_NAME --host 0.0.0.0 --port 8000"
-    echo ""
-    echo "Press Ctrl+C to stop the server"
-    echo "============================================================"
-    echo ""
     
-    python3 -m sglang.launch_server \
-        --model-path "$MODEL_REPO" \
-        --tp-size "$TENSOR_PARALLEL_SIZE" \
-        --tool-call-parser glm45 \
-        --reasoning-parser glm45 \
-        --speculative-algorithm EAGLE \
-        --speculative-num-steps 3 \
-        --speculative-eagle-topk 1 \
-        --speculative-num-draft-tokens 4 \
-        --mem-fraction-static 0.7 \
-        --disable-shared-experts-fusion \
-        --served-model-name "$MODEL_NAME" \
-        --host 0.0.0.0 \
-        --port 8000 \
-	--api-key YOUR_API_KEY
+    # Check if it's an FP8 model and set different parameters
+    if [[ "$MODEL_REPO" == *"FP8"* ]]; then
+        echo "Command: python3 -m sglang.launch_server --model-path $MODEL_REPO --tp-size $TENSOR_PARALLEL_SIZE --tool-call-parser glm45 --reasoning-parser glm45 --speculative-algorithm EAGLE --speculative-num-steps 3 --speculative-eagle-topk 1 --speculative-num-draft-tokens 4 --mem-fraction-static 0.7 --disable-shared-experts-fusion --served-model-name $MODEL_NAME --host 0.0.0.0 --port 8000"
+        echo ""
+        echo "Press Ctrl+C to stop the server"
+        echo "============================================================"
+        echo ""
+        
+        python3 -m sglang.launch_server \
+            --model-path "$MODEL_REPO" \
+            --tp-size "$TENSOR_PARALLEL_SIZE" \
+            --tool-call-parser glm45 \
+            --reasoning-parser glm45 \
+            --speculative-algorithm EAGLE \
+            --speculative-num-steps 3 \
+            --speculative-eagle-topk 1 \
+            --speculative-num-draft-tokens 4 \
+            --mem-fraction-static 0.7 \
+            --disable-shared-experts-fusion \
+            --served-model-name "$MODEL_NAME" \
+            --host 0.0.0.0 \
+            --port 8000 \
+	    --api-key YOUR_API_KEY
+    else
+        echo "Command: python3 -m sglang.launch_server --model-path $MODEL_REPO --tp-size $TENSOR_PARALLEL_SIZE --tool-call-parser glm45 --reasoning-parser glm45 --speculative-algorithm EAGLE --speculative-num-steps 3 --speculative-eagle-topk 1 --speculative-num-draft-tokens 4 --mem-fraction-static 0.7 --served-model-name $MODEL_NAME --host 0.0.0.0 --port 8000"
+        echo ""
+        echo "Press Ctrl+C to stop the server"
+        echo "============================================================"
+        echo ""
+        
+        python3 -m sglang.launch_server \
+            --model-path "$MODEL_REPO" \
+            --tp-size "$TENSOR_PARALLEL_SIZE" \
+            --tool-call-parser glm45 \
+            --reasoning-parser glm45 \
+            --speculative-algorithm EAGLE \
+            --speculative-num-steps 3 \
+            --speculative-eagle-topk 1 \
+            --speculative-num-draft-tokens 4 \
+            --mem-fraction-static 0.7 \
+            --served-model-name "$MODEL_NAME" \
+            --host 0.0.0.0 \
+            --port 8000 \
+	    --api-key YOUR_API_KEY
+    fi
 }
 
 # Main execution
