@@ -161,7 +161,8 @@ run_vllm_server() {
         --tool-call-parser glm45 \
         --reasoning-parser glm45 \
         --enable-auto-tool-choice \
-        --served-model-name "$MODEL_NAME"
+        --served-model-name "$MODEL_NAME" \
+	--api-key YOUR_API_KEY
 }
 
 # Function to run SGLang server
@@ -193,7 +194,8 @@ run_sglang_server() {
         --disable-shared-experts-fusion \
         --served-model-name "$MODEL_NAME" \
         --host 0.0.0.0 \
-        --port 8000
+        --port 8000 \
+	--api-key YOUR_API_KEY
 }
 
 # Main execution
