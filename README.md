@@ -1,7 +1,7 @@
 # ml-setup
 
 ### Login your GPU compute VPS. If it has a username other than ubuntu, replace it below.
-sudo mkdir -p /data/ml ; sudo chown -R ubuntu:ubuntu /data/* ; cd /data/ml ; git clone https://github.com/ymonye/ml-setup.git ; mv ml-setup scripts ; cd scripts
+sudo mkdir -p /workspace ; sudo chown -R ubuntu:ubuntu /workspace/* ; cd /workspace ; git clone https://github.com/ymonye/ml-setup.git ; mv ml-setup scripts ; cd scripts
 
 ### Setup Server with the Following Commands (Assumes using H100/H200/B200 GPU types)
 
