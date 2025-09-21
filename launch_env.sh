@@ -148,7 +148,7 @@ else
     if [ -n "$HF_HOME" ]; then
         HF_PATH="$HF_HOME"
     else
-        HF_PATH="/data/ml/models/huggingface"
+        HF_PATH="/workspace/models/huggingface"
     fi
     
     # Set ML environment variables

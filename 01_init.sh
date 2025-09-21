@@ -38,7 +38,7 @@ fi
 
 if [[ "$UPDATE_SYSTEM" =~ ^[Yy]$ ]]; then
     print_info "Updating system packages..."
-    sudo apt-get update
+    apt-get update
     if [ $? -ne 0 ]; then
         print_error "Failed to update packages"
         exit 1
@@ -59,7 +59,7 @@ fi
 
 if [[ "$UPGRADE_SYSTEM" =~ ^[Yy]$ ]]; then
     print_info "Upgrading system packages..."
-    sudo apt-get upgrade -y
+    apt-get upgrade -y
     if [ $? -ne 0 ]; then
         print_error "Failed to upgrade packages"
         exit 1
@@ -67,6 +67,73 @@ if [[ "$UPGRADE_SYSTEM" =~ ^[Yy]$ ]]; then
     print_info "✓ System packages upgraded"
 else
     print_info "Skipped system upgrade"
+fi
+
+echo ""
+
+# Basic Linux essentials installed after upgrades to keep tooling current
+BASIC_LINUX_ESSENTIALS=(curl wget less vim tmux htop nvtop)
+if [ "$AUTO_YES" = true ]; then
+    INSTALL_BASICS="y"
+else
+    read -p "Install basic Linux essentials (${BASIC_LINUX_ESSENTIALS[*]})? (y/n): " INSTALL_BASICS
+fi
+
+if [[ "$INSTALL_BASICS" =~ ^[Yy]$ ]]; then
+    print_info "Installing basic Linux essentials..."
+    if apt-get install -y "${BASIC_LINUX_ESSENTIALS[@]}"; then
+        print_info "✓ Basic Linux essentials installed"
+    else
+        print_warning "Failed to install some basic Linux essentials"
+    fi
+else
+    print_info "Skipped installing basic Linux essentials"
+fi
+
+if command -v ibtop &> /dev/null; then
+    print_info "ibtop already installed"
+else
+    if [ "$AUTO_YES" = true ]; then
+        INSTALL_IBTOP="y"
+    else
+        read -p "Install ibtop (network monitoring tool)? (y/n): " INSTALL_IBTOP
+    fi
+
+    if [[ "$INSTALL_IBTOP" =~ ^[Yy]$ ]]; then
+        print_info "Installing ibtop network monitoring tool..."
+        if curl -fsSL https://raw.githubusercontent.com/JannikSt/ibtop/main/install.sh | bash; then
+            print_info "✓ ibtop installed successfully"
+        else
+            print_warning "Failed to install ibtop"
+        fi
+    else
+        print_info "Skipped ibtop installation"
+    fi
+fi
+
+if command -v tmux &> /dev/null; then
+    TMUX_CONFIG_SOURCE="$(dirname "$0")/configs/.tmux.conf"
+    TMUX_CONFIG_TARGET="$HOME/.tmux.conf"
+
+    if [ "$AUTO_YES" = true ]; then
+        COPY_TMUX_CONFIG="y"
+    else
+        read -p "Copy tmux config from $TMUX_CONFIG_SOURCE to $TMUX_CONFIG_TARGET? (y/n): " COPY_TMUX_CONFIG
+    fi
+
+    if [[ "$COPY_TMUX_CONFIG" =~ ^[Yy]$ ]]; then
+        if [ -f "$TMUX_CONFIG_SOURCE" ]; then
+            if cp "$TMUX_CONFIG_SOURCE" "$TMUX_CONFIG_TARGET"; then
+                print_info "✓ tmux config copied to $TMUX_CONFIG_TARGET"
+            else
+                print_warning "Failed to copy tmux config"
+            fi
+        else
+            print_warning "tmux config not found at $TMUX_CONFIG_SOURCE"
+        fi
+    else
+        print_info "Skipped copying tmux config"
+    fi
 fi
 
 echo ""

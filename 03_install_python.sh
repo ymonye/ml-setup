@@ -48,122 +48,270 @@ reload_shell_env() {
 # Initial environment load
 reload_shell_env
 
-# Step 1: Check and install pyenv
-print_info "Checking pyenv..."
+print_info "Checking pyenv availability..."
 if command -v pyenv &> /dev/null; then
-    print_info "✓ pyenv is installed"
+    print_info "✓ pyenv detected ($(pyenv --version | head -1))"
 else
-    print_error "✗ pyenv is not installed"
-    
+    print_warning "pyenv not found; it will be required if you choose to install a new Python version."
+fi
+
+find_system_python3() {
+    local candidates=(
+        /usr/bin/python3
+        /usr/local/bin/python3
+        /bin/python3
+    )
+
+    for candidate in "${candidates[@]}"; do
+        if [ -x "$candidate" ]; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+
+    echo ""
+    return 1
+}
+
+fetch_latest_python_version() {
+    local latest=""
+
+    if command -v pyenv &> /dev/null; then
+        latest=$(pyenv install --list 2>/dev/null | grep -E '^\s*[0-9]+\.[0-9]+\.[0-9]+$' | tr -d ' ' | tail -1)
+    elif command -v curl &> /dev/null; then
+        latest=$(curl -fsSL https://www.python.org/downloads/ 2>/dev/null | \
+            grep -m1 -oP 'Latest Python 3 Release - Python \K[0-9]+\.[0-9]+\.[0-9]+')
+    fi
+
+    if [ -z "$latest" ]; then
+        latest="3.12.0"
+    fi
+
+    echo "$latest"
+}
+
+ensure_pyenv() {
+    if command -v pyenv &> /dev/null; then
+        return 0
+    fi
+
+    print_warning "pyenv is not installed"
+
+    local INSTALL_PYENV
     if [ "$AUTO_YES" = true ]; then
         INSTALL_PYENV="y"
+        print_info "Automatic mode enabled (-y): installing pyenv"
     else
         read -p "Install pyenv? (y/n): " INSTALL_PYENV
     fi
-    
-    if [[ "$INSTALL_PYENV" =~ ^[Yy]$ ]]; then
-        print_info "Installing pyenv..."
-        curl https://pyenv.run | bash
-        
-        # Add to bashrc if not present
-        if ! grep -q "PYENV_ROOT" ~/.bashrc; then
-            cat >> ~/.bashrc << 'EOF'
+
+    if [[ ! "$INSTALL_PYENV" =~ ^[Yy]$ ]]; then
+        print_error "pyenv installation declined. Cannot proceed with Python installation."
+        exit 1
+    fi
+
+    print_info "Installing pyenv..."
+    curl https://pyenv.run | bash
+
+    if ! grep -q "PYENV_ROOT" ~/.bashrc 2>/dev/null; then
+        cat >> ~/.bashrc <<'EOF'
 
 # Pyenv configuration
 export PYENV_ROOT="$HOME/.pyenv"
 command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"
 eval "$(pyenv init -)"
 EOF
-            print_info "Added pyenv to ~/.bashrc"
-            NEEDS_PATH_UPDATE=true
-        fi
-        
-        # Reload environment
-        print_info "Reloading shell environment..."
-        reload_shell_env
-        
-        # Verify installation
-        if command -v pyenv &> /dev/null; then
-            print_info "✓ pyenv installed successfully"
-            print_info "  Location: $(which pyenv)"
-        else
-            print_error "Failed to install pyenv"
-            print_error "Please run: source ~/.bashrc"
-            print_error "Then run this script again"
-            exit 1
-        fi
+        print_info "Added pyenv initialization to ~/.bashrc"
+        NEEDS_PATH_UPDATE=true
+    fi
+
+    print_info "Reloading shell environment..."
+    reload_shell_env
+
+    if command -v pyenv &> /dev/null; then
+        print_info "✓ pyenv installed successfully"
+        print_info "  Location: $(which pyenv)"
     else
-        print_info "Skipping pyenv installation. Cannot proceed without pyenv."
+        print_error "pyenv installation failed"
+        print_error "Please run: source ~/.bashrc"
+        print_error "Then rerun this script"
         exit 1
+    fi
+}
+
+ensure_runpod_pyenv_guard() {
+    local bashrc="$HOME/.bashrc"
+    local marker="# runpod_pyenv_guard"
+
+    if [ ! -f "$bashrc" ]; then
+        return
+    fi
+
+    if ! grep -q "/etc/rp_environment" "$bashrc" 2>/dev/null; then
+        return
+    fi
+
+    if grep -q "$marker" "$bashrc" 2>/dev/null; then
+        return
+    fi
+
+    if ! command -v python3 &> /dev/null; then
+        print_warning "python3 not available for RunPod guard modification; skipping"
+        return
+    fi
+
+    python3 - <<'PY'
+from pathlib import Path
+
+bashrc_path = Path.home() / ".bashrc"
+text = bashrc_path.read_text()
+needle = "source /etc/rp_environment"
+if needle not in text:
+    raise SystemExit(0)
+
+guard = """
+
+# runpod_pyenv_guard: ensure pyenv remains active after RunPod environment sourcing
+if [ -d "$HOME/.pyenv" ]; then
+    export PYENV_ROOT="$HOME/.pyenv"
+    export PATH="$PYENV_ROOT/bin:$PATH"
+    if command -v pyenv >/dev/null 2>&1; then
+        eval "$(pyenv init -)"
+    fi
+fi
+"""
+
+if guard.strip() in text:
+    raise SystemExit(0)
+
+text = text.replace(needle, needle + guard, 1)
+bashrc_path.write_text(text)
+PY
+
+    print_info "Added RunPod pyenv guard to ~/.bashrc"
+    NEEDS_PATH_UPDATE=true
+}
+
+# Step 1 & 2: Evaluate current Python and decide on installation
+PYENV_EXPECTED=false
+TARGET_PYTHON_VERSION=""
+
+print_info "Checking python3 availability..."
+CURRENT_PYTHON_VERSION=""
+PYTHON_PRESENT=false
+PYTHON_PATH=""
+
+if command -v python3 &> /dev/null; then
+    PYTHON_PATH=$(command -v python3)
+    CURRENT_PYTHON_VERSION=$(python3 --version 2>&1 | awk '{print $2}')
+    PYTHON_PRESENT=true
+    print_info "✓ python3 found on PATH at $PYTHON_PATH (version $CURRENT_PYTHON_VERSION)"
+else
+    SYSTEM_PYTHON_BIN=$(find_system_python3)
+    if [ -n "$SYSTEM_PYTHON_BIN" ]; then
+        CURRENT_PYTHON_VERSION=$($SYSTEM_PYTHON_BIN --version 2>&1 | awk '{print $2}')
+        PYTHON_PRESENT=true
+        PYTHON_PATH="$SYSTEM_PYTHON_BIN"
+        print_info "✓ System python3 located at $SYSTEM_PYTHON_BIN (version $CURRENT_PYTHON_VERSION)"
+    else
+        print_warning "python3 not found via PATH or standard locations"
     fi
 fi
 
-echo ""
-
-# Step 2: Check and install Python 3.12
-print_info "Checking Python 3.12..."
-if pyenv versions 2>/dev/null | grep -q "3.12"; then
-    print_info "✓ Python 3.12 is installed"
-    
-    # Check if it's the global version
-    if pyenv version | grep -q "3.12"; then
-        print_info "✓ Python 3.12 is set as global"
-    else
-        print_warning "Python 3.12 is installed but not set as global"
-        if [ "$AUTO_YES" = true ]; then
-            SET_GLOBAL="y"
-        else
-            read -p "Set Python 3.12 as global? (y/n): " SET_GLOBAL
-        fi
-        
-        if [[ "$SET_GLOBAL" =~ ^[Yy]$ ]]; then
-            # Get the latest 3.12.x version
-            PYTHON_312_VERSION=$(pyenv versions | grep "3.12" | head -1 | tr -d ' *')
-            pyenv global $PYTHON_312_VERSION
-            pyenv rehash
-            print_info "✓ Set Python $PYTHON_312_VERSION as global"
-        fi
-    fi
+LATEST_PYTHON_VERSION=$(fetch_latest_python_version)
+if [ -z "$LATEST_PYTHON_VERSION" ]; then
+    LATEST_PYTHON_VERSION="3.12.0"
+    print_warning "Unable to determine the latest Python release automatically; defaulting to $LATEST_PYTHON_VERSION"
 else
-    print_error "✗ Python 3.12 is not installed"
-    
+    print_info "Latest Python release detected: $LATEST_PYTHON_VERSION"
+fi
+
+PYTHON_ACTION=""
+
+if [ "$PYTHON_PRESENT" = false ]; then
+    print_warning "No existing python3 installation detected; a new version will be installed."
+    PYTHON_ACTION="install_latest"
+else
     if [ "$AUTO_YES" = true ]; then
-        INSTALL_PYTHON="y"
+        PYTHON_ACTION="install_latest"
+        print_info "Automatic mode (-y): installing latest Python via pyenv ($LATEST_PYTHON_VERSION)"
     else
-        read -p "Install Python 3.12? This will take 5-15 minutes. (y/n): " INSTALL_PYTHON
+        while true; do
+            echo "Choose Python setup option:"
+            echo "  1) Keep current version ($CURRENT_PYTHON_VERSION)"
+            echo "  2) Install latest version via pyenv ($LATEST_PYTHON_VERSION)"
+            echo "  3) Install custom version via pyenv"
+            read -p "Enter choice (1/2/3): " PYTHON_CHOICE
+
+            if [[ ! "$PYTHON_CHOICE" =~ ^[123]$ ]]; then
+                print_error "Invalid choice. Please enter 1, 2, or 3."
+                continue
+            fi
+
+            if [ "$PYTHON_CHOICE" = "1" ]; then
+                PYTHON_ACTION="keep"
+                break
+            elif [ "$PYTHON_CHOICE" = "2" ]; then
+                PYTHON_ACTION="install_latest"
+                break
+            elif [ "$PYTHON_CHOICE" = "3" ]; then
+                PYTHON_ACTION="install_custom"
+                break
+            fi
+        done
     fi
-    
-    if [[ "$INSTALL_PYTHON" =~ ^[Yy]$ ]]; then
-        # Get the latest Python 3.12.x version
-        print_info "Finding latest Python 3.12 version..."
-        LATEST_312=$(pyenv install --list | grep "^\s*3\.12" | grep -v "[a-zA-Z]" | tail -1 | tr -d ' ')
-        
-        if [ -z "$LATEST_312" ]; then
-            print_error "Could not find Python 3.12 version"
-            exit 1
-        fi
-        
-        print_info "Installing Python $LATEST_312 via pyenv..."
-        print_info "This compiles Python from source and may take 5-15 minutes."
-        
-        # Speed up compilation with parallel jobs
-        MAKE_OPTS="-j$(nproc)" pyenv install $LATEST_312
-        
-        if [ $? -eq 0 ]; then
-            pyenv global $LATEST_312
-            pyenv rehash
-            
-            # Reload to get new Python
-            reload_shell_env
-            
-            print_info "✓ Python $LATEST_312 installed and set as global"
+fi
+
+CUSTOM_VERSION=""
+if [ "$PYTHON_ACTION" = "install_custom" ]; then
+    while true; do
+        read -p "Enter desired Python version (e.g. 3.11.8): " CUSTOM_VERSION
+        if [[ "$CUSTOM_VERSION" =~ ^[0-9]+(\.[0-9]+)+$ ]]; then
+            break
         else
-            print_error "Failed to install Python $LATEST_312"
+            print_error "Invalid version format. Please use numeric values like 3.11.8"
+        fi
+    done
+    TARGET_PYTHON_VERSION="$CUSTOM_VERSION"
+fi
+
+if [ "$PYTHON_ACTION" = "keep" ]; then
+    TARGET_PYTHON_VERSION="$CURRENT_PYTHON_VERSION"
+    print_info "Keeping existing python3 version $TARGET_PYTHON_VERSION"
+else
+    ensure_pyenv
+    PYENV_EXPECTED=true
+
+    if [ "$PYTHON_ACTION" = "install_latest" ]; then
+        # Re-fetch latest version now that pyenv is available
+        LATEST_PYTHON_VERSION=$(fetch_latest_python_version)
+        TARGET_PYTHON_VERSION="$LATEST_PYTHON_VERSION"
+    fi
+
+    if [ -z "$TARGET_PYTHON_VERSION" ]; then
+        print_error "No target Python version specified"
+        exit 1
+    fi
+
+    if pyenv versions 2>/dev/null | tr -d ' *' | grep -qx "$TARGET_PYTHON_VERSION"; then
+        print_info "Python $TARGET_PYTHON_VERSION already installed via pyenv"
+    else
+        print_info "Installing Python $TARGET_PYTHON_VERSION via pyenv..."
+        print_info "This compiles Python from source and may take several minutes."
+        MAKE_OPTS="-j$(nproc)" pyenv install "$TARGET_PYTHON_VERSION"
+        if [ $? -ne 0 ]; then
+            print_error "Failed to install Python $TARGET_PYTHON_VERSION"
             exit 1
         fi
-    else
-        print_info "Skipping Python 3.12 installation."
     fi
+
+    pyenv global "$TARGET_PYTHON_VERSION"
+    pyenv rehash
+    reload_shell_env
+    ensure_runpod_pyenv_guard
+    CURRENT_PYTHON_VERSION="$TARGET_PYTHON_VERSION"
+    PYTHON_PRESENT=true
+    print_info "Python $TARGET_PYTHON_VERSION is now set as the global pyenv version"
 fi
 
 echo ""
@@ -225,27 +373,27 @@ ALL_GOOD=true
 
 print_info "Final verification:"
 
-# Check pyenv
 if command -v pyenv &> /dev/null; then
     print_info "  ✓ pyenv: $(pyenv --version | head -1)"
     print_info "    Location: $(which pyenv)"
-else
-    print_error "  ✗ pyenv not found"
+elif [ "$PYENV_EXPECTED" = true ]; then
+    print_error "  ✗ pyenv not found despite installation attempt"
     ALL_GOOD=false
+else
+    print_info "  ℹ pyenv not installed (not requested)"
 fi
 
-# Check Python
-if command -v python &> /dev/null && python --version 2>&1 | grep -q "3.12"; then
-    print_info "  ✓ Python: $(python --version)"
-    print_info "    Location: $(which python)"
-else
-    if pyenv versions 2>/dev/null | grep -q "3.12"; then
-        print_warning "  ! Python 3.12 installed but not active"
-        PYTHON_312_VERSION=$(pyenv versions | grep "3.12" | head -1 | tr -d ' *')
-        print_info "    Run: pyenv global $PYTHON_312_VERSION"
-    else
-        print_error "  ✗ Python 3.12 not installed"
+if command -v python3 &> /dev/null; then
+    ACTIVE_PYTHON_VERSION=$(python3 --version 2>&1 | awk '{print $2}')
+    print_info "  ✓ python3: $(python3 --version)"
+    print_info "    Location: $(which python3)"
+    if [ -n "$TARGET_PYTHON_VERSION" ] && [ "$PYTHON_ACTION" != "keep" ] && [ "$ACTIVE_PYTHON_VERSION" != "$TARGET_PYTHON_VERSION" ]; then
+        print_warning "  ! Expected python3 version $TARGET_PYTHON_VERSION but found $ACTIVE_PYTHON_VERSION"
+        print_info "    Run: pyenv global $TARGET_PYTHON_VERSION"
+        ALL_GOOD=false
     fi
+else
+    print_error "  ✗ python3 not found"
     ALL_GOOD=false
 fi
 

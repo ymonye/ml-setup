@@ -8,7 +8,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Default values
-DEFAULT_HF_PATH="/data/ml/models/huggingface"
+DEFAULT_HF_PATH="/workspace/models/huggingface"
 DEFAULT_MODEL="PrimeIntellect/INTELLECT-2"
 
 # Function to print colored output

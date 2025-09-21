@@ -113,7 +113,7 @@ esac
 ENV_PATH="$HOME/${ENV_NAME}_env"
 
 # Ask for HuggingFace model storage location
-DEFAULT_HF_PATH="/data/ml/models/huggingface"
+DEFAULT_HF_PATH="/workspace/models/huggingface"
 if [ "$AUTO_MODE" = false ]; then
     echo ""
     print_info "Where would you like to store HuggingFace models?"
@@ -349,8 +349,8 @@ DIRS=(
     "$HF_GRANDPARENT"
     "$HF_PARENT"
     "$HF_PATH"
-    "/data/ml/scripts"
-    "/data/ml/logs"
+    "/workspace/scripts"
+    "/workspace/logs"
 )
 
 for dir in "${DIRS[@]}"; do
