@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Script: 03_install_python.sh
-# Purpose: Check and install Python 3.12 via pyenv and uv
+# Purpose: Check and install the latest Python via pyenv and uv
 
 # Colors
 RED='\033[0;31m'
@@ -77,8 +77,10 @@ fetch_latest_python_version() {
     local latest=""
 
     if command -v pyenv &> /dev/null; then
-        latest=$(pyenv install --list 2>/dev/null | grep -E '^\s*[0-9]+\.[0-9]+\.[0-9]+$' | tr -d ' ' | tail -1)
-    elif command -v curl &> /dev/null; then
+        latest=$(pyenv install --list 2>/dev/null | sed 's/^ *//' | grep -E '^3\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
+    fi
+
+    if [ -z "$latest" ] && command -v curl &> /dev/null; then
         latest=$(curl -fsSL https://www.python.org/downloads/ 2>/dev/null | \
             grep -m1 -oP 'Latest Python 3 Release - Python \K[0-9]+\.[0-9]+\.[0-9]+')
     fi
@@ -232,34 +234,29 @@ if [ "$PYTHON_PRESENT" = false ]; then
     print_warning "No existing python3 installation detected; a new version will be installed."
     PYTHON_ACTION="install_latest"
 else
-    if [ "$AUTO_YES" = true ]; then
-        PYTHON_ACTION="install_latest"
-        print_info "Automatic mode (-y): installing latest Python via pyenv ($LATEST_PYTHON_VERSION)"
-    else
-        while true; do
-            echo "Choose Python setup option:"
-            echo "  1) Keep current version ($CURRENT_PYTHON_VERSION)"
-            echo "  2) Install latest version via pyenv ($LATEST_PYTHON_VERSION)"
-            echo "  3) Install custom version via pyenv"
-            read -p "Enter choice (1/2/3): " PYTHON_CHOICE
+    while true; do
+        echo "Choose Python setup option:"
+        echo "  1) Keep current version ($CURRENT_PYTHON_VERSION)"
+        echo "  2) Install latest version via pyenv ($LATEST_PYTHON_VERSION)"
+        echo "  3) Install custom version via pyenv"
+        read -p "Enter choice (1/2/3): " PYTHON_CHOICE
 
-            if [[ ! "$PYTHON_CHOICE" =~ ^[123]$ ]]; then
-                print_error "Invalid choice. Please enter 1, 2, or 3."
-                continue
-            fi
+        if [[ ! "$PYTHON_CHOICE" =~ ^[123]$ ]]; then
+            print_error "Invalid choice. Please enter 1, 2, or 3."
+            continue
+        fi
 
-            if [ "$PYTHON_CHOICE" = "1" ]; then
-                PYTHON_ACTION="keep"
-                break
-            elif [ "$PYTHON_CHOICE" = "2" ]; then
-                PYTHON_ACTION="install_latest"
-                break
-            elif [ "$PYTHON_CHOICE" = "3" ]; then
-                PYTHON_ACTION="install_custom"
-                break
-            fi
-        done
-    fi
+        if [ "$PYTHON_CHOICE" = "1" ]; then
+            PYTHON_ACTION="keep"
+            break
+        elif [ "$PYTHON_CHOICE" = "2" ]; then
+            PYTHON_ACTION="install_latest"
+            break
+        else
+            PYTHON_ACTION="install_custom"
+            break
+        fi
+    done
 fi
 
 CUSTOM_VERSION=""
@@ -340,26 +337,8 @@ else
             NEEDS_PATH_UPDATE=true
         fi
         
-        # Reload environment
-        print_info "Reloading shell environment..."
-        reload_shell_env
-        
-        # Verify installation - check multiple times as sometimes it takes a moment
-        for i in {1..3}; do
-            if command -v uv &> /dev/null; then
-                print_info "✓ uv installed successfully"
-                print_info "  Location: $(which uv)"
-                break
-            else
-                sleep 1
-            fi
-        done
-        
-        if ! command -v uv &> /dev/null; then
-            print_error "uv not found in PATH"
-            print_info "Please run: source ~/.bashrc"
-            print_info "Then verify with: which uv"
-        fi
+        print_info "Please run: source ~/.bashrc"
+        print_info "Then verify with: which uv"
     else
         print_info "Skipping uv installation."
     fi
@@ -397,29 +376,21 @@ else
     ALL_GOOD=false
 fi
 
-# Check uv
-if command -v uv &> /dev/null; then
-    print_info "  ✓ uv: $(uv --version)"
-    print_info "    Location: $(which uv)"
-else
-    print_error "  ✗ uv not found"
-    ALL_GOOD=false
-fi
-
 echo ""
 
 # Summary
 if [ "$ALL_GOOD" = true ]; then
     print_info "✅ All Python tools are properly installed!"
 else
-    if [ "$NEEDS_PATH_UPDATE" = true ]; then
-        print_warning "Some tools may not be visible until you reload your shell."
-        print_info "Please run:"
-        print_command "source ~/.bashrc"
-        print_info "Or start a new terminal session, then run this script again to verify."
-    else
-        print_error "Some tools are missing or not properly configured."
-    fi
+    print_error "Some tools are missing or not properly configured."
+fi
+
+if [ "$NEEDS_PATH_UPDATE" = true ]; then
+    echo ""
+    print_warning "Some tools may not be visible until you reload your shell."
+    print_info "Please run:"
+    print_command "source ~/.bashrc"
+    print_info "Or start a new terminal session, then run this script again to verify."
 fi
 
 # Debug info if needed
