@@ -17,6 +17,78 @@ NC='\033[0m'
 print_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
+resolve_env_type() {
+    case "$1" in
+        1|deepseek_v3_lightllm|deepseek-v3-lightllm)
+            echo "deepseek-v3-lightllm"
+            ;;
+        2|deepseek_v3_lmdeploy|deepseek-v3-lmdeploy)
+            echo "deepseek-v3-lmdeploy"
+            ;;
+        3|deepseek_v3_sglang|deepseek-v3-sglang)
+            echo "deepseek-v3-sglang"
+            ;;
+        4|deepseek_v3_tensorrt_llm|deepseek-v3-tensorrt-llm)
+            echo "deepseek-v3-tensorrt-llm"
+            ;;
+        5|deepseek_v3_vllm|deepseek-v3-vllm)
+            echo "deepseek-v3-vllm"
+            ;;
+        6|glm_4.5|glm45_sglang|glm-4.5-sglang)
+            echo "glm-4.5-sglang"
+            ;;
+        7|glm_4.5_vllm|glm45_vllm|glm-4.5-vllm)
+            echo "glm-4.5-vllm"
+            ;;
+        8|gptoss_tensorrt_llm|gpt-oss_tensorrt_llm|gptoss-tensorrt-llm|gpt-oss-tensorrt-llm)
+            echo "gpt-oss-tensorrt-llm"
+            ;;
+        9|gptoss_transformers|gpt-oss_transformers|gptoss-transformers|gpt-oss-transformers)
+            echo "gpt-oss-transformers"
+            ;;
+        10|gptoss_vllm|gpt-oss_vllm|vllm_gptoss|gptoss-vllm|gpt-oss-vllm)
+            echo "gpt-oss-vllm"
+            ;;
+        11|kimi_k2_sglang|kimi-k2-sglang)
+            echo "kimi-k2-sglang"
+            ;;
+        12|kimi_k2_tensorrt_llm|kimi-k2-tensorrt-llm)
+            echo "kimi-k2-tensorrt-llm"
+            ;;
+        13|kimi_k2_vllm|kimi-k2-vllm)
+            echo "kimi-k2-vllm"
+            ;;
+        14|qwen3_sglang|qwen3-sglang)
+            echo "qwen3-sglang"
+            ;;
+        15|qwen3_transformers|qwen3-transformers)
+            echo "qwen3-transformers"
+            ;;
+        16|qwen3_vllm|qwen3-vllm)
+            echo "qwen3-vllm"
+            ;;
+        17|custom)
+            echo "custom"
+            ;;
+        *)
+            if [[ "$1" =~ ^[0-9]+$ ]]; then
+                return 1
+            fi
+            return 1
+            ;;
+    esac
+}
+
+resolve_env_name() {
+    local env_type="$1"
+
+    if [ -z "$env_type" ]; then
+        echo "custom"
+        return 0
+    fi
+
+    echo "$env_type"
+}
 
 # Check if being sourced
 if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
@@ -49,66 +121,51 @@ done
 if [ -z "$ENV_TYPE" ] && [ "$AUTO_MODE" = false ]; then
     echo ""
     print_info "Select ML environment type:"
-    echo "1) GLM 4.5"
-    echo "2) GPT-OSS"
-    echo "3) SGLang"
-    echo "4) Transformers"
-    echo "5) vLLM"
+    echo "1) DeepSeek-V3/V3.1/R1 (LightLLM)"
+    echo "2) DeepSeek-V3/V3.1/R1 (LMDeploy)"
+    echo "3) DeepSeek-V3/V3.1/R1 (SGLang)"
+    echo "4) DeepSeek-V3/V3.1/R1 (TensorRT-LLM)"
+    echo "5) DeepSeek-V3/V3.1/R1 (vLLM)"
+    echo "6) GLM 4.5 (SGLang)"
+    echo "7) GLM 4.5 (vLLM)"
+    echo "8) gpt-oss (TensorRT-LLM)"
+    echo "9) gpt-oss (Transformers)"
+    echo "10) gpt-oss (vLLM)"
+    echo "11) Kimi K2 (SGLang)"
+    echo "12) Kimi K2 (TensorRT-LLM)"
+    echo "13) Kimi K2 (vLLM)"
+    echo "14) Qwen3 (SGLang)"
+    echo "15) Qwen3 (Transformers)"
+    echo "16) Qwen3 (vLLM)"
+    echo "17) Custom"
     echo ""
     while true; do
-        read -p "Enter your choice (1-5): " choice
-        case $choice in
-            1)
-                ENV_TYPE="glm_4.5"
-                break
-                ;;
-            2)
-                ENV_TYPE="vllm-gptoss"
-                break
-                ;;
-            3)
-                ENV_TYPE="sglang"
-                break
-                ;;
-            4)
-                ENV_TYPE="transformers"
-                break
-                ;;
-            5)
-                ENV_TYPE="vllm"
-                break
-                ;;
-            *)
-                print_error "Invalid choice. Please enter 1, 2, 3, 4, or 5."
-                ;;
-        esac
+        read -p "Enter your choice (1-17): " choice
+        if ENV_TYPE=$(resolve_env_type "$choice"); then
+            break
+        else
+            print_error "Invalid choice. Please enter a number between 1 and 17."
+        fi
     done
 elif [ -z "$ENV_TYPE" ]; then
-    # Default to vllm in auto mode
-    ENV_TYPE="vllm"
+    # Default to DeepSeek-V3/V3.1/R1 (LightLLM) in auto mode
+    ENV_TYPE="deepseek_v3_lightllm"
+fi
+
+# Normalize environment type when provided directly
+if [ -n "$ENV_TYPE" ]; then
+    if ENV_TYPE_MAPPED=$(resolve_env_type "$ENV_TYPE"); then
+        ENV_TYPE="$ENV_TYPE_MAPPED"
+    fi
+fi
+
+if [[ "$ENV_TYPE" =~ ^[0-9]+$ ]]; then
+    print_error "Invalid environment selection: $ENV_TYPE"
+    return 1
 fi
 
 # Set environment name based on type
-case $ENV_TYPE in
-    vllm|1)
-        ENV_NAME="vllm"
-        ;;
-    vllm-gptoss|2)
-        ENV_NAME="vllm_gptoss"
-        ;;
-    sglang|3)
-        ENV_NAME="sglang"
-        ;;
-    transformers|4)
-        ENV_NAME="transformers"
-        ;;
-    glm_4.5|5)
-        ENV_NAME="glm_4.5"
-        ;;
-    *)
-        ENV_NAME="$ENV_TYPE"
-        ;;
-esac
+ENV_NAME=$(resolve_env_name "$ENV_TYPE")
 
 ENV_PATH="$HOME/${ENV_NAME}_env"
 

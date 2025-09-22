@@ -72,7 +72,7 @@ fi
 echo ""
 
 # Basic Linux essentials installed after upgrades to keep tooling current
-BASIC_LINUX_ESSENTIALS=(curl wget less vim tmux htop nvtop)
+BASIC_LINUX_ESSENTIALS=(curl wget less vim nano tmux git git-lfs htop nvtop)
 if [ "$AUTO_YES" = true ]; then
     INSTALL_BASICS="y"
 else
