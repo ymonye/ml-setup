@@ -400,3 +400,42 @@ if [ "$ALL_GOOD" = false ]; then
     print_info "  PATH: $PATH"
     print_info "  PYENV_ROOT: ${PYENV_ROOT:-not set}"
 fi
+
+if command -v python3 &> /dev/null; then
+    if ! command -v python &> /dev/null; then
+        echo ""
+        print_warning "python command not found, but python3 is available."
+        PYTHON3_BIN_PATH=$(command -v python3)
+        print_info "python3 resolves to: $PYTHON3_BIN_PATH"
+
+        SYMLINK_DIR=$(dirname "$PYTHON3_BIN_PATH")
+        SYMLINK_PATH="$SYMLINK_DIR/python"
+
+        if [ ! -w "$SYMLINK_DIR" ]; then
+            SYMLINK_DIR="$HOME/.local/bin"
+            SYMLINK_PATH="$SYMLINK_DIR/python"
+            mkdir -p "$SYMLINK_DIR"
+        fi
+
+        while true; do
+            read -p "Create python symlink pointing to python3 at $SYMLINK_PATH? (y/n): " CREATE_PYTHON_SYMLINK
+            if [[ "$CREATE_PYTHON_SYMLINK" =~ ^[YyNn]$ ]]; then
+                break
+            fi
+            print_error "Please answer y or n."
+        done
+
+        if [[ "$CREATE_PYTHON_SYMLINK" =~ ^[Yy]$ ]]; then
+            if ln -sf "$PYTHON3_BIN_PATH" "$SYMLINK_PATH"; then
+                print_info "Created python symlink at $SYMLINK_PATH"
+                if [ "$SYMLINK_DIR" = "$HOME/.local/bin" ] && ! echo "$PATH" | tr ':' '\n' | grep -qx "$HOME/.local/bin"; then
+                    print_warning "~/.local/bin is not currently on PATH; add it to your shell profile to use the python alias."
+                fi
+            else
+                print_error "Failed to create python symlink at $SYMLINK_PATH"
+            fi
+        else
+            print_info "Skipped creating python symlink."
+        fi
+    fi
+fi
