@@ -208,7 +208,6 @@ if command -v npm &> /dev/null; then
     print_info "  5. OpenAI Codex (@openai/codex)"
     print_info "  6. Qwen Code (@qwen-code/qwen-code)"
     print_info "  7. OpenCode AI (opencode-ai)"
-    print_info "  8. Cursor CLI"
     echo ""
     
     if [ "$AUTO_YES" = true ]; then
@@ -326,18 +325,6 @@ if command -v npm &> /dev/null; then
             print_info "Installing OpenCode AI..."
             npm install -g opencode-ai@latest
             [ $? -eq 0 ] && print_info "✓ OpenCode AI installed" || print_warning "Failed to install OpenCode AI"
-        fi
-        
-        # Cursor CLI
-        if [ "$AUTO_YES" = true ]; then
-            INSTALL_CURSOR="y"
-        else
-            read -p "  Install Cursor CLI? (y/n): " INSTALL_CURSOR
-        fi
-        if [[ "$INSTALL_CURSOR" =~ ^[Yy]$ ]]; then
-            print_info "Installing Cursor CLI..."
-            curl https://cursor.com/install -fsS | bash
-            [ $? -eq 0 ] && print_info "✓ Cursor CLI installed" || print_warning "Failed to install Cursor CLI"
         fi
     else
         print_info "Skipped CLI installations"

@@ -18,10 +18,10 @@
     }
   ],
   "Router": {
-    "default": "kimi-k2-local,glm-4.5-local",
-    "background": "kimi-k2-local,glm-4.5-local",
-    "think": "kimi-k2-local,glm-4.5-local",
-    "longContext": "kimi-k2-local,glm-4.5-local",
-    "webSearch": "kimi-k2-local,glm-4.5-local"
+    "default": "glm-4.5-local",
+    "background": "glm-4.5-local",
+    "think": "glm-4.5-local",
+    "longContext": "glm-4.5-local",
+    "webSearch": "glm-4.5-local"
   }
 }
