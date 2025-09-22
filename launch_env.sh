@@ -19,55 +19,43 @@ print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 resolve_env_type() {
     case "$1" in
-        1|deepseek_v3_lightllm|deepseek-v3-lightllm)
-            echo "deepseek-v3-lightllm"
-            ;;
-        2|deepseek_v3_lmdeploy|deepseek-v3-lmdeploy)
+        1|deepseek_v3_lmdeploy|deepseek-v3-lmdeploy)
             echo "deepseek-v3-lmdeploy"
             ;;
-        3|deepseek_v3_sglang|deepseek-v3-sglang)
+        2|deepseek_v3_sglang|deepseek-v3-sglang)
             echo "deepseek-v3-sglang"
             ;;
-        4|deepseek_v3_tensorrt_llm|deepseek-v3-tensorrt-llm)
-            echo "deepseek-v3-tensorrt-llm"
-            ;;
-        5|deepseek_v3_vllm|deepseek-v3-vllm)
+        3|deepseek_v3_vllm|deepseek-v3-vllm)
             echo "deepseek-v3-vllm"
             ;;
-        6|glm_4.5|glm45_sglang|glm-4.5-sglang)
+        4|glm_4.5|glm45_sglang|glm-4.5-sglang)
             echo "glm-4.5-sglang"
             ;;
-        7|glm_4.5_vllm|glm45_vllm|glm-4.5-vllm)
+        5|glm_4.5_vllm|glm45_vllm|glm-4.5-vllm)
             echo "glm-4.5-vllm"
             ;;
-        8|gptoss_tensorrt_llm|gpt-oss_tensorrt_llm|gptoss-tensorrt-llm|gpt-oss-tensorrt-llm)
-            echo "gpt-oss-tensorrt-llm"
-            ;;
-        9|gptoss_transformers|gpt-oss_transformers|gptoss-transformers|gpt-oss-transformers)
+        6|gptoss_transformers|gpt-oss_transformers|gptoss-transformers|gpt-oss-transformers)
             echo "gpt-oss-transformers"
             ;;
-        10|gptoss_vllm|gpt-oss_vllm|vllm_gptoss|gptoss-vllm|gpt-oss-vllm)
+        7|gptoss_vllm|gpt-oss_vllm|vllm_gptoss|gptoss-vllm|gpt-oss-vllm)
             echo "gpt-oss-vllm"
             ;;
-        11|kimi_k2_sglang|kimi-k2-sglang)
+        8|kimi_k2_sglang|kimi-k2-sglang)
             echo "kimi-k2-sglang"
             ;;
-        12|kimi_k2_tensorrt_llm|kimi-k2-tensorrt-llm)
-            echo "kimi-k2-tensorrt-llm"
-            ;;
-        13|kimi_k2_vllm|kimi-k2-vllm)
+        9|kimi_k2_vllm|kimi-k2-vllm)
             echo "kimi-k2-vllm"
             ;;
-        14|qwen3_sglang|qwen3-sglang)
+        10|qwen3_sglang|qwen3-sglang)
             echo "qwen3-sglang"
             ;;
-        15|qwen3_transformers|qwen3-transformers)
+        11|qwen3_transformers|qwen3-transformers)
             echo "qwen3-transformers"
             ;;
-        16|qwen3_vllm|qwen3-vllm)
+        12|qwen3_vllm|qwen3-vllm)
             echo "qwen3-vllm"
             ;;
-        17|custom)
+        13|custom)
             echo "custom"
             ;;
         *)
@@ -121,35 +109,31 @@ done
 if [ -z "$ENV_TYPE" ] && [ "$AUTO_MODE" = false ]; then
     echo ""
     print_info "Select ML environment type:"
-    echo "1) DeepSeek-V3/V3.1/R1 (LightLLM)"
-    echo "2) DeepSeek-V3/V3.1/R1 (LMDeploy)"
-    echo "3) DeepSeek-V3/V3.1/R1 (SGLang)"
-    echo "4) DeepSeek-V3/V3.1/R1 (TensorRT-LLM)"
-    echo "5) DeepSeek-V3/V3.1/R1 (vLLM)"
-    echo "6) GLM 4.5 (SGLang)"
-    echo "7) GLM 4.5 (vLLM)"
-    echo "8) gpt-oss (TensorRT-LLM)"
-    echo "9) gpt-oss (Transformers)"
-    echo "10) gpt-oss (vLLM)"
-    echo "11) Kimi K2 (SGLang)"
-    echo "12) Kimi K2 (TensorRT-LLM)"
-    echo "13) Kimi K2 (vLLM)"
-    echo "14) Qwen3 (SGLang)"
-    echo "15) Qwen3 (Transformers)"
-    echo "16) Qwen3 (vLLM)"
-    echo "17) Custom"
+    echo "1) DeepSeek-V3/V3.1/R1 (LMDeploy)"
+    echo "2) DeepSeek-V3/V3.1/R1 (SGLang)"
+    echo "3) DeepSeek-V3/V3.1/R1 (vLLM)"
+    echo "4) GLM 4.5 (SGLang)"
+    echo "5) GLM 4.5 (vLLM)"
+    echo "6) gpt-oss (Transformers)"
+    echo "7) gpt-oss (vLLM)"
+    echo "8) Kimi K2 (SGLang)"
+    echo "9) Kimi K2 (vLLM)"
+    echo "10) Qwen3 (SGLang)"
+    echo "11) Qwen3 (Transformers)"
+    echo "12) Qwen3 (vLLM)"
+    echo "13) Custom"
     echo ""
     while true; do
-        read -p "Enter your choice (1-17): " choice
+        read -p "Enter your choice (1-13): " choice
         if ENV_TYPE=$(resolve_env_type "$choice"); then
             break
         else
-            print_error "Invalid choice. Please enter a number between 1 and 17."
+            print_error "Invalid choice. Please enter a number between 1 and 13."
         fi
     done
 elif [ -z "$ENV_TYPE" ]; then
-    # Default to DeepSeek-V3/V3.1/R1 (LightLLM) in auto mode
-    ENV_TYPE="deepseek_v3_lightllm"
+    # Default to DeepSeek-V3/V3.1/R1 (LMDeploy) in auto mode
+    ENV_TYPE="deepseek_v3_lmdeploy"
 fi
 
 # Normalize environment type when provided directly

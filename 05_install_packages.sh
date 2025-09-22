@@ -1,267 +1,405 @@
-#!/usr/bin/env python3
-"""
-Script: 05_install_packages.py
-Purpose: Install ML packages based on detected Python environment
-Usage: python 05_install_packages.py [-y]
-"""
+#!/bin/bash
 
-import os
-import sys
-import subprocess
-import argparse
-from pathlib import Path
+# Script: 05_install_packages.sh
+# Purpose: Provide environment placeholders without installing packages.
+# Usage: ./05_install_packages.sh [--env ENV_NAME]
 
-# Colors for output
-class Colors:
-    RED = '\033[0;31m'
-    GREEN = '\033[0;32m'
-    YELLOW = '\033[1;33m'
-    BLUE = '\033[0;34m'
-    NC = '\033[0m'  # No Color
+if [ -f ~/.bashrc ]; then
+    source ~/.bashrc
+fi
 
-def print_info(msg):
-    print(f"{Colors.GREEN}[INFO]{Colors.NC} {msg}")
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
 
-def print_error(msg):
-    print(f"{Colors.RED}[ERROR]{Colors.NC} {msg}")
+print_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
+print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
+print_command() { echo -e "${BLUE}[RUN]${NC} $1"; }
 
-def print_warning(msg):
-    print(f"{Colors.YELLOW}[WARNING]{Colors.NC} {msg}")
+ACTION_TAKEN=false
 
-def print_command(msg):
-    print(f"{Colors.BLUE}[RUN]{Colors.NC} {msg}")
+ENV_TYPES=(
+  "deepseek-v3-lmdeploy"
+  "deepseek-v3-sglang"
+  "deepseek-v3-vllm"
+  "glm-4.5-sglang"
+  "glm-4.5-vllm"
+  "gpt-oss-transformers"
+  "gpt-oss-vllm"
+  "kimi-k2-sglang"
+  "kimi-k2-vllm"
+  "qwen3-sglang"
+  "qwen3-transformers"
+  "qwen3-vllm"
+)
 
-def detect_environment():
-    """Detect which ML environment is active"""
-    virtual_env = os.environ.get('VIRTUAL_ENV', '')
-    
-    if not virtual_env:
-        return None
-    
-    env_path = Path(virtual_env)
-    env_name = env_path.name
-    
-    # Check if it's one of our expected environments (from 03_setup_env.sh)
-    if 'vllm_env' in str(env_path):
-        return 'vllm'
-    elif 'glm_4.5_env' in str(env_path):
-        return 'glm_4.5'
-    elif 'vllm_gptoss_env' in str(env_path):
-        return 'vllm_gptoss'
-    elif 'sglang_env' in str(env_path):
-        return 'sglang'
-    elif 'transformers_env' in str(env_path):
-        return 'transformers'
-    
-    # Also check by exact name match
-    if env_name == 'vllm_env':
-        return 'vllm'
-    elif env_name == 'glm_4.5_env':
-        return 'glm_4.5'
-    elif env_name == 'vllm_gptoss_env':
-        return 'vllm_gptoss'
-    elif env_name == 'sglang_env':
-        return 'sglang'
-    elif env_name == 'transformers_env':
-        return 'transformers'
-    
-    return None
+declare -A ENV_DESCRIPTIONS=(
+  ["deepseek-v3-lmdeploy"]="DeepSeek-V3/V3.1/R1 (LMDeploy)"
+  ["deepseek-v3-sglang"]="DeepSeek-V3/V3.1/R1 (SGLang)"
+  ["deepseek-v3-vllm"]="DeepSeek-V3/V3.1/R1 (vLLM)"
+  ["glm-4.5-sglang"]="GLM 4.5 (SGLang)"
+  ["glm-4.5-vllm"]="GLM 4.5 (vLLM)"
+  ["gpt-oss-transformers"]="gpt-oss (Transformers)"
+  ["gpt-oss-vllm"]="gpt-oss (vLLM)"
+  ["kimi-k2-sglang"]="Kimi K2 (SGLang)"
+  ["kimi-k2-vllm"]="Kimi K2 (vLLM)"
+  ["qwen3-sglang"]="Qwen3 (SGLang)"
+  ["qwen3-transformers"]="Qwen3 (Transformers)"
+  ["qwen3-vllm"]="Qwen3 (vLLM)"
+)
 
-def run_command(cmd, description=""):
-    """Run a shell command and return success status"""
-    if description:
-        print_info(description)
-    print_command(cmd)
-    
-    try:
-        # Stream output directly to terminal so dependencies are visible
-        result = subprocess.run(cmd, shell=True, check=True)
-        print_info("✓ Installation successful")
-        return True
-    except subprocess.CalledProcessError as e:
-        print_error("✗ Installation failed")
-        return False
+resolve_env_type() {
+    case "$1" in
+        1|deepseek_v3_lmdeploy|deepseek-v3-lmdeploy)
+            echo "deepseek-v3-lmdeploy"
+            ;;
+        2|deepseek_v3_sglang|deepseek-v3-sglang)
+            echo "deepseek-v3-sglang"
+            ;;
+        3|deepseek_v3_vllm|deepseek-v3-vllm)
+            echo "deepseek-v3-vllm"
+            ;;
+        4|glm_4.5|glm45_sglang|glm-4.5-sglang)
+            echo "glm-4.5-sglang"
+            ;;
+        5|glm_4.5_vllm|glm45_vllm|glm-4.5-vllm)
+            echo "glm-4.5-vllm"
+            ;;
+        6|gptoss_transformers|gpt-oss_transformers|gptoss-transformers|gpt-oss-transformers)
+            echo "gpt-oss-transformers"
+            ;;
+        7|gptoss_vllm|gpt-oss_vllm|vllm_gptoss|gptoss-vllm|gpt-oss-vllm)
+            echo "gpt-oss-vllm"
+            ;;
+        8|kimi_k2_sglang|kimi-k2-sglang)
+            echo "kimi-k2-sglang"
+            ;;
+        9|kimi_k2_vllm|kimi-k2-vllm)
+            echo "kimi-k2-vllm"
+            ;;
+        10|qwen3_sglang|qwen3-sglang)
+            echo "qwen3-sglang"
+            ;;
+        11|qwen3_transformers|qwen3-transformers)
+            echo "qwen3-transformers"
+            ;;
+        12|qwen3_vllm|qwen3-vllm)
+            echo "qwen3-vllm"
+            ;;
+        *)
+            if [[ "$1" =~ ^[0-9]+$ ]]; then
+                return 1
+            fi
+            return 1
+            ;;
+    esac
+}
 
-def ask_install(prompt, auto_yes=False):
-    """Ask user for installation confirmation"""
-    if auto_yes:
-        return True
-    
-    response = input(f"{prompt} (y/n): ").strip().lower()
-    return response in ['y', 'yes']
+print_env_options() {
+    print_info "Available environments from 04_setup_env.sh:"
+    local index=1
+    for key in "${ENV_TYPES[@]}"; do
+        printf "  %2d) %s (%s)\n" "$index" "${ENV_DESCRIPTIONS[$key]}" "$key"
+        index=$((index + 1))
+    done
+}
 
+normalize_env_name() {
+    local raw="$1"
+    raw="${raw%/}"
+    raw=$(basename "$raw")
+    raw="${raw%_env}"
+    echo "$raw"
+}
 
-def check_nvcc():
-    """Check if nvcc is available"""
-    try:
-        result = subprocess.run(['nvcc', '--version'], 
-                              capture_output=True, text=True, check=True)
-        print_info("✓ CUDA toolkit (nvcc) available")
-        return True
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        print_warning("✗ CUDA toolkit (nvcc) not found")
-        return False
-
-def install_vllm_packages(auto_yes=False):
-    """Install packages for regular vllm environment"""
-    print_info("Installing packages for vllm_env...")
-    
-    if ask_install("Install vLLM?", auto_yes):
-        cmd = "uv pip install vllm --torch-backend=auto"
-        if not run_command(cmd, "Installing vLLM"):
-            return False
-    
-    return True
-
-def install_glm_4_5_packages(auto_yes=False):
-    """Install packages for GLM 4.5 environment"""
-    print_info("Installing packages for glm_4.5_env...")
-    
-    # Install main requirements
-    requirements = [
-        "transformers>=4.55.3",
-        "pre-commit>=4.2.0",
-        "accelerate>=1.10.0",
-        "sglang>=0.5.1",
-        "vllm>=0.10.1.1",
-	"orjson",
-	"sgl_kernel",
-	"nvidia-ml-py",
-	"torchao"
-    ]
-    
-    if ask_install("Install GLM 4.5 environment packages?", auto_yes):
-        # Properly quote requirements for shell - each requirement must be quoted
-        quoted_reqs = ' '.join(f"'{req}'" for req in requirements)
-        cmd = f"uv pip install {quoted_reqs}"
-        if not run_command(cmd, "Installing GLM 4.5 requirements"):
-            return False
-    
-    # Install vLLM with streaming tool call support
-    if ask_install("Install vLLM nightly for streaming tool call support?", auto_yes):
-        cmd = "uv pip install -U vllm --pre --extra-index-url https://wheels.vllm.ai/nightly"
-        if not run_command(cmd, "Installing vLLM nightly for streaming tool call support"):
-            print_warning("vLLM nightly installation failed, but continuing...")
-    
-    return True
-
-def install_vllm_gptoss_packages(auto_yes=False):
-    """Install packages for vllm GPT-OSS environment"""
-    print_info("Installing packages for vllm_gptoss_env...")
-    
-    if ask_install("Install GPT-OSS enabled vLLM?", auto_yes):
-        cmd = ("uv pip install --pre vllm==0.10.1+gptoss "
-               "--extra-index-url https://wheels.vllm.ai/gpt-oss/ "
-               "--extra-index-url https://download.pytorch.org/whl/nightly/cu128 "
-               "--index-strategy unsafe-best-match")
-        if not run_command(cmd, "Installing GPT-OSS enabled vLLM"):
-            return False
-    
-    return True
-
-def install_sglang_packages(auto_yes=False):
-    """Install packages for sglang environment"""
-    print_info("Installing packages for sglang_env...")
-    
-    if ask_install("Install SGLang?", auto_yes):
-        cmd = "uv pip install sglang[all]"
-        if not run_command(cmd, "Installing SGLang"):
-            return False
-    
-    return True
-
-def install_transformers_packages(auto_yes=False):
-    """Install packages for transformers environment"""
-    print_info("Installing packages for transformers_env...")
-    
-    # Main transformers packages
-    if ask_install("Install transformers ecosystem packages?", auto_yes):
-        cmd = "uv pip install -U transformers accelerate torch triton kernels"
-        if not run_command(cmd, "Installing transformers ecosystem"):
-            return False
-    
-    # Triton kernels from git
-    if ask_install("Install Triton kernels for MXFP4 compatibility?", auto_yes):
-        cmd = "uv pip install git+https://github.com/triton-lang/triton.git@main#subdirectory=python/triton_kernels"
-        if not run_command(cmd, "Installing Triton kernels"):
-            print_warning("Triton kernels installation failed, but continuing...")
-    
-    return True
-
-def main():
-    parser = argparse.ArgumentParser(description='Install ML packages based on environment')
-    parser.add_argument('-y', '--yes', action='store_true', 
-                       help='Auto-accept all prompts')
-    args = parser.parse_args()
-    
-    # Check if in virtual environment
-    if not os.environ.get('VIRTUAL_ENV'):
-        print_error("No virtual environment activated!")
-        print_info("Please activate one of the following environments:")
-        print_command("source ~/vllm_env/bin/activate")
-        print_command("source ~/vllm_gptoss_env/bin/activate")
-        print_command("source ~/sglang_env/bin/activate")
-        print_command("source ~/transformers_env/bin/activate")
-        print_command("source ~/glm_4.5_env/bin/activate")
+detect_environment() {
+    local virtual_env="${VIRTUAL_ENV:-}"
+    if [ -z "$virtual_env" ]; then
         return 1
-    
-    print_info(f"Virtual environment: {os.environ['VIRTUAL_ENV']}")
-    print()
-    
-    # Detect environment type
-    env_type = detect_environment()
-    
-    if not env_type:
-        print_error("Current environment is not one of the expected ML environments!")
-        print_info("Expected one of: vllm_env, vllm_gptoss_env, sglang_env, transformers_env, glm_4.5_env")
-        print_info(f"Current environment: {os.environ.get('VIRTUAL_ENV', 'None')}")
+    fi
+
+    local base
+    base=$(normalize_env_name "$virtual_env")
+
+    if resolved=$(resolve_env_type "$base"); then
+        echo "$resolved"
+        return 0
+    fi
+
+    for key in "${ENV_TYPES[@]}"; do
+        if [[ "$virtual_env" == *"/${key}_env"* ]] || [[ "$virtual_env" == *"/$key"* ]]; then
+            echo "$key"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+handle_environment() {
+    local env="$1"
+    local desc="${ENV_DESCRIPTIONS[$env]}"
+
+    if [ -z "$desc" ]; then
+        desc="$env"
+    fi
+
+    print_info "Environment: $desc"
+}
+
+run_command() {
+    local cmd=("$@")
+    print_command "$(printf '%q ' "${cmd[@]}")"
+    if "${cmd[@]}"; then
+        return 0
+    fi
+    return 1
+}
+
+run_uv_install() {
+    if ! command -v uv >/dev/null 2>&1; then
+        print_error "uv is not available on PATH."
         return 1
-    
-    print_info(f"Detected environment type: {env_type}")
-    print()
-    
-    # Check for CUDA
-    has_nvcc = check_nvcc()
-    print()
-    
-    # Check if TORCH_CUDA_ARCH_LIST is set
-    arch_list = os.environ.get('TORCH_CUDA_ARCH_LIST')
-    if arch_list:
-        print_info(f"Using TORCH_CUDA_ARCH_LIST={arch_list} from environment")
-    else:
-        print_info("TORCH_CUDA_ARCH_LIST not set - PyTorch will use default architectures")
-    print()
-    
-    # Install packages based on environment
-    success = False
-    
-    if env_type == 'vllm':
-        success = install_vllm_packages(args.yes)
-    elif env_type == 'glm_4.5':
-        success = install_glm_4_5_packages(args.yes)
-    elif env_type == 'vllm_gptoss':
-        success = install_vllm_gptoss_packages(args.yes)
-    elif env_type == 'sglang':
-        success = install_sglang_packages(args.yes)
-    elif env_type == 'transformers':
-        success = install_transformers_packages(args.yes)
-    
-    # Summary
-    print()
-    print("=" * 50)
-    if success:
-        print_info("Installation complete!")
-        print_info(f"Environment: {env_type}")
-        
-        # Verify GPU availability
-        print()
-        print_info("To verify GPU availability:")
-        print_command("python -c 'import torch; print(f\"CUDA available: {torch.cuda.is_available()}\")'")
-    else:
-        print_error("Some installations failed. Please check the errors above.")
-        return 1
-    
+    fi
+
+    local cmd=(uv pip install)
+    cmd+=("$@")
+
+    if run_command "${cmd[@]}"; then
+        print_info "Packages installed successfully."
+        return 0
+    fi
+
+    print_error "Package installation failed."
+    return 1
+}
+
+install_glm_sglang() {
+    print_info "Installing packages for GLM 4.5 (SGLang)..."
+    local packages=(
+        "transformers>=4.56.1"
+        "pre-commit>=4.2.0"
+        "accelerate>=1.10.0"
+        "sglang>=0.5.2"
+    )
+
+    run_uv_install "${packages[@]}"
+}
+
+install_glm_vllm() {
+    print_info "Installing packages for GLM 4.5 (vLLM)..."
+    local packages=(
+        "transformers>=4.56.1"
+        "pre-commit>=4.2.0"
+        "accelerate>=1.10.0"
+        "vllm>=0.10.2"
+    )
+
+    run_uv_install "${packages[@]}"
+}
+
+install_deepseek_lmdeploy() {
+    print_info "Installing LMDeploy for DeepSeek..."
+    local target_dir="${LMDEPLOY_DIR:-$HOME/lmdeploy}"
+
+    if [ -d "$target_dir/.git" ]; then
+        print_info "Updating existing repository at $target_dir"
+        run_command git -C "$target_dir" fetch origin || return 1
+        run_command git -C "$target_dir" checkout support-dsv3 || return 1
+        run_command git -C "$target_dir" pull --ff-only || return 1
+    else
+        run_command git clone -b support-dsv3 https://github.com/InternLM/lmdeploy.git "$target_dir" || return 1
+    fi
+
+    run_uv_install -e "$target_dir"
+}
+
+install_deepseek_sglang() {
+    print_info "Installing SGLang for DeepSeek..."
+    run_uv_install "sglang[all]>=0.5.3rc0"
+}
+
+install_deepseek_vllm() {
+    print_info "Installing vLLM for DeepSeek..."
+    run_uv_install vllm
+}
+
+install_gptoss_transformers() {
+    print_info "Installing Transformers stack for gpt-oss..."
+    run_uv_install -U transformers accelerate torch triton==3.4 kernels
+}
+
+install_gptoss_vllm() {
+    print_info "Installing vLLM GPT-OSS build..."
+    run_uv_install --pre vllm==0.10.1+gptoss \
+        --extra-index-url https://wheels.vllm.ai/gpt-oss/ \
+        --extra-index-url https://download.pytorch.org/whl/nightly/cu128 \
+        --index-strategy unsafe-best-match
+}
+
+install_kimi_sglang() {
+    print_info "Installing SGLang for Kimi K2..."
+    run_uv_install sglang
+}
+
+install_kimi_vllm() {
+    print_info "Installing vLLM for Kimi K2..."
+    run_uv_install "vllm>=0.10.0rc1"
+}
+
+install_qwen3_sglang() {
+    print_info "Installing SGLang for Qwen3..."
+    run_uv_install "sglang[all]>=0.4.6.post1"
+}
+
+install_qwen3_transformers() {
+    print_info "Installing Transformers stack for Qwen3..."
+    run_uv_install "transformers>=4.51.0" "torch>=2.6"
+}
+
+install_qwen3_vllm() {
+    print_info "Installing vLLM for Qwen3..."
+    run_uv_install "vllm>=0.8.5"
+}
+
+perform_environment_action() {
+    ACTION_TAKEN=false
+
+    case "$1" in
+        deepseek-v3-lmdeploy)
+            install_deepseek_lmdeploy || return 1
+            ACTION_TAKEN=true
+            ;;
+        deepseek-v3-sglang)
+            install_deepseek_sglang || return 1
+            ACTION_TAKEN=true
+            ;;
+        deepseek-v3-vllm)
+            install_deepseek_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
+        glm-4.5-sglang)
+            install_glm_sglang || return 1
+            ACTION_TAKEN=true
+            ;;
+        glm-4.5-vllm)
+            install_glm_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
+        gpt-oss-transformers)
+            install_gptoss_transformers || return 1
+            ACTION_TAKEN=true
+            ;;
+        gpt-oss-vllm)
+            install_gptoss_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
+        kimi-k2-sglang)
+            install_kimi_sglang || return 1
+            ACTION_TAKEN=true
+            ;;
+        kimi-k2-vllm)
+            install_kimi_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
+        qwen3-sglang)
+            install_qwen3_sglang || return 1
+            ACTION_TAKEN=true
+            ;;
+        qwen3-transformers)
+            install_qwen3_transformers || return 1
+            ACTION_TAKEN=true
+            ;;
+        qwen3-vllm)
+            install_qwen3_vllm || return 1
+            ACTION_TAKEN=true
+            ;;
+        *)
+            print_info "No automated package actions configured for this environment."
+            ;;
+    esac
+
     return 0
+}
 
-if __name__ == "__main__":
-    sys.exit(main())
+main() {
+    local override=""
+    local show_help=false
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --env)
+                if [[ $# -lt 2 ]]; then
+                    print_error "Missing value for --env"
+                    return 1
+                fi
+                override="$2"
+                shift 2
+                ;;
+            -y|--yes|--auto)
+                print_warning "Flag '$1' has no effect; no installations occur in this script."
+                shift
+                ;;
+            -h|--help)
+                show_help=true
+                shift
+                ;;
+            *)
+                print_warning "Ignoring unknown argument: $1"
+                shift
+                ;;
+        esac
+    done
+
+    if [ "$show_help" = true ]; then
+        echo "Usage: ./05_install_packages.sh [--env ENV_NAME]"
+        echo
+        print_env_options
+        return 0
+    fi
+
+    local env_type=""
+
+    if [ -n "$override" ]; then
+        if env_type=$(resolve_env_type "$override"); then
+            print_info "Environment override provided: $env_type"
+        else
+            print_warning "Environment override '$override' is not managed by this script."
+            print_info "Nothing to configure in 05_install_packages.sh."
+            return 0
+        fi
+    else
+        if ! env_type=$(detect_environment); then
+            if [ -n "${VIRTUAL_ENV:-}" ]; then
+                print_warning "Active virtual environment '$VIRTUAL_ENV' is not managed by this script."
+            else
+                print_info "No active virtual environment detected."
+            fi
+            print_info "Nothing to configure in 05_install_packages.sh."
+            return 0
+        fi
+    fi
+
+    if [ -n "${VIRTUAL_ENV:-}" ]; then
+        print_info "Virtual environment: $VIRTUAL_ENV"
+    fi
+
+    echo
+    handle_environment "$env_type"
+    echo
+
+    if ! perform_environment_action "$env_type"; then
+        print_error "Environment handling failed."
+        return 1
+    fi
+
+    if [ "$ACTION_TAKEN" = false ]; then
+        print_info "Nothing to install. Customize this script if you need per-environment actions."
+    fi
+}
+
+main "$@"
+exit $?
