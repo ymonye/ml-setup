@@ -135,8 +135,8 @@ if [ "$ID" = "ubuntu" ]; then
     fi
     OS_TYPE="ubuntu"
     PKG_MANAGER="apt"
-    PKG_INSTALL_CMD="NEEDRESTART_MODE=l apt install -y"
-    PKG_UPDATE_CMD="NEEDRESTART_MODE=l apt update"
+    PKG_INSTALL_CMD="sudo NEEDRESTART_MODE=l apt install -y"
+    PKG_UPDATE_CMD="sudo NEEDRESTART_MODE=l apt update"
     PKG_QUERY_CMD="dpkg -l"
     print_info "✓ Ubuntu $VERSION_ID detected"
 elif [[ "$ID" =~ ^(rhel|rocky|almalinux)$ ]]; then
@@ -146,8 +146,8 @@ elif [[ "$ID" =~ ^(rhel|rocky|almalinux)$ ]]; then
     fi
     OS_TYPE="rhel"
     PKG_MANAGER="dnf"
-    PKG_INSTALL_CMD="dnf install -y"
-    PKG_UPDATE_CMD="dnf makecache"
+    PKG_INSTALL_CMD="sudo dnf install -y"
+    PKG_UPDATE_CMD="sudo dnf makecache"
     PKG_QUERY_CMD="rpm -qa"
     print_info "✓ $NAME $VERSION_ID detected"
 else
@@ -161,7 +161,7 @@ AVAILABLE_SPACE=$(df -BG /var | awk 'NR==2 {print $4}' | sed 's/G//')
 if [ "$AVAILABLE_SPACE" -lt 5 ]; then
     print_error "Low disk space: ${AVAILABLE_SPACE}GB available on /var"
     print_error "At least 5GB recommended for package installation"
-    print_info "Free up space with: apt clean"
+    print_info "Free up space with: sudo apt clean"
     exit 1
 else
     print_info "✓ Disk space: ${AVAILABLE_SPACE}GB available"
@@ -325,7 +325,7 @@ if [[ "$INSTALL_SYSTEM_PACKAGES" =~ ^[Yy]$ ]]; then
             
             if [[ "$CLEAN_CACHE" =~ ^[Yy]$ ]]; then
                 print_info "Cleaning apt cache to free space..."
-                apt clean
+                sudo apt clean
             else
                 print_warning "Proceeding without cleaning apt cache - installation may fail if space runs out"
             fi
@@ -334,9 +334,9 @@ if [[ "$INSTALL_SYSTEM_PACKAGES" =~ ^[Yy]$ ]]; then
         # Update package lists
         if [ "$OS_TYPE" = "ubuntu" ]; then
             print_info "Note: Using NEEDRESTART_MODE=l to prevent automatic service restarts"
-            NEEDRESTART_MODE=l apt update
+            sudo NEEDRESTART_MODE=l apt update
         elif [ "$OS_TYPE" = "rhel" ]; then
-            dnf makecache
+            sudo dnf makecache
         fi
         
         if [ $? -ne 0 ]; then
@@ -344,9 +344,9 @@ if [[ "$INSTALL_SYSTEM_PACKAGES" =~ ^[Yy]$ ]]; then
             INSTALL_SUCCESS=false
         else
             if [ "$OS_TYPE" = "ubuntu" ]; then
-                NEEDRESTART_MODE=l apt install -y ${MISSING_PACKAGES[*]}
+                sudo NEEDRESTART_MODE=l apt install -y ${MISSING_PACKAGES[*]}
             elif [ "$OS_TYPE" = "rhel" ]; then
-                dnf install -y ${MISSING_PACKAGES[*]}
+                sudo dnf install -y ${MISSING_PACKAGES[*]}
             fi
             
             if [ $? -ne 0 ]; then
@@ -378,7 +378,7 @@ if [[ "$INSTALL_SYSTEM_PACKAGES" =~ ^[Yy]$ ]]; then
                 if [[ "$INSTALL_GPP" =~ ^[Yy]$ ]]; then
                     print_info "Installing g++-$GCC_VERSION to match gcc-$GCC_VERSION..."
                     if [ "$OS_TYPE" = "ubuntu" ]; then
-                        if NEEDRESTART_MODE=l apt install -y g++-$GCC_VERSION; then
+                        if sudo NEEDRESTART_MODE=l apt install -y g++-$GCC_VERSION; then
                             print_info "✓ g++-$GCC_VERSION installed"
                             
                             # Ask about setting as default
@@ -389,7 +389,7 @@ if [[ "$INSTALL_SYSTEM_PACKAGES" =~ ^[Yy]$ ]]; then
                             fi
                             
                             if [[ "$SET_DEFAULT" =~ ^[Yy]$ ]]; then
-                                if update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-$GCC_VERSION 100; then
+                                if sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-$GCC_VERSION 100; then
                                     print_info "✓ Set g++-$GCC_VERSION as default g++ compiler"
                                 else
                                     print_warning "Could not set g++-$GCC_VERSION as default"
@@ -609,14 +609,14 @@ echo ""
 
                         if [ "$APT_UPDATED" = false ]; then
                             print_info "Updating apt package index before CUDA installation..."
-                            if ! NEEDRESTART_MODE=l apt update; then
+                            if ! sudo NEEDRESTART_MODE=l apt update; then
                                 print_warning "apt update failed; CUDA installation may require manual dependency resolution"
                             fi
                             APT_UPDATED=true
                         fi
 
                         print_info "Installing CUDA toolkit package..."
-                        if NEEDRESTART_MODE=l apt install -y "$CUDA_DEB_FILE"; then
+                        if sudo NEEDRESTART_MODE=l apt install -y "$CUDA_DEB_FILE"; then
                             print_info "✓ CUDA toolkit $TARGET_CUDA_VERSION installed successfully"
                             CUDA_INSTALLED=true
                         else

@@ -13,6 +13,38 @@ print_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 
+ensure_sudo_installed() {
+    if command -v sudo &> /dev/null; then
+        print_info "sudo already installed"
+        return
+    fi
+
+    if [ "$(id -u)" -ne 0 ]; then
+        print_error "sudo is required but not installed. Run this script as root or install sudo manually."
+        exit 1
+    fi
+
+    if [ "$AUTO_YES" = true ]; then
+        INSTALL_SUDO="y"
+        print_info "AUTO_YES enabled; installing sudo without prompt"
+    else
+        read -p "sudo is required. Install sudo now? (y/n): " INSTALL_SUDO
+    fi
+
+    if [[ "$INSTALL_SUDO" =~ ^[Yy]$ ]]; then
+        print_info "Installing sudo..."
+        if apt-get update && apt-get install -y sudo; then
+            print_info "✓ sudo installed"
+        else
+            print_error "Failed to install sudo"
+            exit 1
+        fi
+    else
+        print_error "Cannot continue without sudo"
+        exit 1
+    fi
+}
+
 # Parse arguments
 AUTO_YES=false
 if [[ "$1" == "-y" ]] || [[ "$1" == "--auto" ]]; then
@@ -29,6 +61,8 @@ fi
 print_info "Initialization Script for Development Environment"
 echo ""
 
+ensure_sudo_installed
+
 # Update Ubuntu
 if [ "$AUTO_YES" = true ]; then
     UPDATE_SYSTEM="y"
@@ -38,7 +72,7 @@ fi
 
 if [[ "$UPDATE_SYSTEM" =~ ^[Yy]$ ]]; then
     print_info "Updating system packages..."
-    apt-get update
+    sudo apt-get update
     if [ $? -ne 0 ]; then
         print_error "Failed to update packages"
         exit 1
@@ -54,12 +88,12 @@ echo ""
 if [ "$AUTO_YES" = true ]; then
     UPGRADE_SYSTEM="y"
 else
-    read -p "Upgrade system packages (apt-get upgrade)? This may take a while. (y/n): " UPGRADE_SYSTEM
+    read -p "Upgrade system packages (sudo apt-get upgrade)? This may take a while. (y/n): " UPGRADE_SYSTEM
 fi
 
 if [[ "$UPGRADE_SYSTEM" =~ ^[Yy]$ ]]; then
     print_info "Upgrading system packages..."
-    apt-get upgrade -y
+    sudo apt-get upgrade -y
     if [ $? -ne 0 ]; then
         print_error "Failed to upgrade packages"
         exit 1
@@ -81,7 +115,7 @@ fi
 
 if [[ "$INSTALL_BASICS" =~ ^[Yy]$ ]]; then
     print_info "Installing basic Linux essentials..."
-    if apt-get install -y "${BASIC_LINUX_ESSENTIALS[@]}"; then
+    if sudo apt-get install -y "${BASIC_LINUX_ESSENTIALS[@]}"; then
         print_info "✓ Basic Linux essentials installed"
     else
         print_warning "Failed to install some basic Linux essentials"
