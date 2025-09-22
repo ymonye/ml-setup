@@ -201,6 +201,10 @@ install_glm_sglang() {
         "einops"
         "msgspec"
         "python-multipart"
+	"torchao"
+	"xgrammar"
+	"openai_harmony"
+	"nvidia-ml-py"
     )
 
     run_uv_install "${packages[@]}"
