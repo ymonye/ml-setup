@@ -4,7 +4,7 @@
 For this, it's assumed your working directory is either `/` or `/workspace`. Edit as needed.
 
 ### 2a. If the default user is `root`, run the below:
-`mkdir -p /workspace ; cd /workspace ; git clone https://github.com/ymonye/ml-setup.git ; mv ml-setup scripts ; cd scripts`<br><br>
+`mkdir -p /workspace ; cd /workspace ; git clone https://github.com/keennay/gpu-cluster-setup.git ; mv gpu-cluster-setup scripts ; cd scripts`<br><br>
 `./01_init.sh`<br>
 `./02_install_dependencies.sh`<br>
 `./03_install_python.sh`<br>
