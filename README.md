@@ -12,10 +12,10 @@ For this, it's assumed your working directory is either `/` or `/workspace`. Edi
 `./05_install_packages.sh`<br>
 
 ### 3. Install any selection of open-weights models (DeepSeek V3/V3.1/R1, GLM-4.5, gpt-oss, Kimi K2, Qwen3)
-./install_model.sh
+`./install_model.sh`
 
 ### Template for Running GLM-4.5:
-./run_glm.sh
+`./run_glm.sh`
 
 ### Change Between Python Environments
-./launch_env.sh
+`source ./launch_env.sh`
